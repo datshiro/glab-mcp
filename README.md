@@ -8,6 +8,22 @@ AI assistant → glab-mcp → GitLab API
 
 ---
 
+## Quick Start
+
+```bash
+npx glab-mcp init
+```
+
+The setup wizard will:
+1. Ask for your GitLab URL and Personal Access Token
+2. Validate your credentials against the GitLab API
+3. Auto-detect your installed AI clients (Claude Code, Claude Desktop, Cursor)
+4. Write the correct config file for each client
+
+That's it. Restart your AI client and start using GitLab tools.
+
+---
+
 ## What it does
 
 | Tool | What it does |
@@ -33,34 +49,11 @@ AI assistant → glab-mcp → GitLab API
 
 ---
 
-## Installation
+## Manual Setup
 
-### Option A — npx (no install)
+If you prefer to configure manually instead of using `npx glab-mcp init`:
 
-```bash
-npx glab-mcp
-```
-
-### Option B — global install
-
-```bash
-npm install -g glab-mcp
-```
-
-### Option C — clone and build
-
-```bash
-git clone https://gitlab.com/yourgroup/glab-mcp
-cd glab-mcp
-npm install
-npm run build
-```
-
----
-
-## Configuration
-
-The server reads two environment variables:
+### Environment variables
 
 | Variable | Required | Example |
 |----------|----------|---------|
@@ -73,39 +66,16 @@ The server reads two environment variables:
 2. Scopes: check **api**
 3. Copy the token — you only see it once
 
-Store it in your shell profile or pass it directly in your MCP client config (see below). Never commit it to version control.
-
----
-
-## MCP client setup
-
 ### Claude Code
 
-Add to `~/.claude/claude_desktop_config.json` (or the equivalent for your OS):
+Add to `.mcp.json` in your project root:
 
 ```json
 {
   "mcpServers": {
     "gitlab": {
       "command": "npx",
-      "args": ["glab-mcp"],
-      "env": {
-        "GITLAB_URL": "https://gitlab.com",
-        "GITLAB_PAT": "glpat-xxxx"
-      }
-    }
-  }
-}
-```
-
-If you cloned and built locally:
-
-```json
-{
-  "mcpServers": {
-    "gitlab": {
-      "command": "node",
-      "args": ["/path/to/glab-mcp/dist/index.js"],
+      "args": ["-y", "glab-mcp"],
       "env": {
         "GITLAB_URL": "https://gitlab.com",
         "GITLAB_PAT": "glpat-xxxx"
@@ -119,7 +89,11 @@ If you cloned and built locally:
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) and add the same `"mcpServers"` block above.
 
-### Cursor / other MCP clients
+### Cursor
+
+Add to `.cursor/mcp.json` in your project root, same `"mcpServers"` block.
+
+### Other MCP clients
 
 Follow your client's MCP server configuration guide and point it at the same command + env vars.
 
@@ -255,6 +229,7 @@ Returns an array of `{ job, stage, log }` for each failed job.
 - **PAT token** — stored only in your MCP client config, never logged or transmitted beyond the GitLab API. Accidentally leaked tokens are redacted to `[REDACTED]` in all error messages.
 - **Shell injection** — all git operations use `execFile` with argv arrays, never `exec` with string interpolation.
 - **Secret file detection** — `ship_mr` scans the working tree before staging. If it finds a file matching a secret pattern it aborts and lists the offending files.
+- **Auto-gitignore** — when `glab-mcp init` stores a PAT directly in `.mcp.json`, it automatically adds the file to `.gitignore` to prevent accidental commits.
 - **Local only** — the server runs as a local process on your machine. No data is sent anywhere except your configured `GITLAB_URL`.
 - **Rate limiting** — the HTTP client backs off automatically on `429` responses (1 s → 2 s → 4 s, then throws).
 
@@ -263,7 +238,7 @@ Returns an array of `{ job, stage, log }` for each failed job.
 ## Development
 
 ```bash
-git clone https://gitlab.com/yourgroup/glab-mcp
+git clone https://github.com/datshiro/glab-mcp
 cd glab-mcp
 npm install
 
@@ -286,7 +261,12 @@ GITLAB_URL=https://gitlab.com GITLAB_PAT=glpat-xxx npm run dev
 src/
   config.ts          # Load and validate env vars
   gitlab-client.ts   # HTTP client (auth, retries, redaction, job trace)
-  index.ts           # MCP server entry point — tool registration
+  index.ts           # MCP server entry point — tool registration + CLI routing
+  cli/
+    init.ts          # Interactive setup wizard
+    config-writer.ts # Read/merge/write MCP config files
+    detect-clients.ts # Auto-detect installed AI clients
+    validate-gitlab.ts # Validate GitLab credentials against API
   tools/
     mr.ts            # MR tools (create, list, comment, approve, merge)
     pipeline.ts      # Pipeline tools (status, errors, jobs, retry)
@@ -294,6 +274,10 @@ src/
 test/
   config.test.ts
   gitlab-client.test.ts
+  cli/
+    config-writer.test.ts
+    detect-clients.test.ts
+    validate-gitlab.test.ts
   tools/
     mr.test.ts
     pipeline.test.ts
@@ -311,7 +295,7 @@ npm version patch   # or minor / major
 git push --follow-tags
 ```
 
-Requires `NPM_TOKEN` set as a CI/CD variable in GitLab.
+Requires `NPM_TOKEN` set as a CI/CD variable.
 
 ---
 
