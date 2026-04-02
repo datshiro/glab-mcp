@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, chmodSync } from 'fs'
 import { dirname, join } from 'path'
 import type { McpClient } from './detect-clients.js'
 
@@ -32,13 +32,21 @@ function buildServerEntry(gitlabUrl: string, pat: string, useEnvVar: boolean, en
   }
 }
 
+export class MalformedConfigError extends Error {
+  constructor(configPath: string) {
+    super(`Existing config file is malformed JSON: ${configPath}\nFix the file manually or delete it and re-run glab-mcp init.`)
+    this.name = 'MalformedConfigError'
+  }
+}
+
 function readExistingConfig(configPath: string): McpConfig {
   if (!existsSync(configPath)) return {}
+  const raw = readFileSync(configPath, 'utf-8')
+  if (raw.trim() === '') return {}
   try {
-    const raw = readFileSync(configPath, 'utf-8')
     return JSON.parse(raw) as McpConfig
   } catch {
-    return {}
+    throw new MalformedConfigError(configPath)
   }
 }
 
@@ -76,7 +84,12 @@ export function writeConfig(
     }
     config.mcpServers.gitlab = buildServerEntry(gitlabUrl, pat, useEnvVar, envVarName)
 
-    writeFileSync(client.configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8')
+    const content = JSON.stringify(config, null, 2) + '\n'
+    writeFileSync(client.configPath, content, { encoding: 'utf-8', mode: useEnvVar ? 0o644 : 0o600 })
+    if (!useEnvVar) {
+      // Ensure restrictive permissions even if file already existed
+      chmodSync(client.configPath, 0o600)
+    }
     result.success = true
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err)

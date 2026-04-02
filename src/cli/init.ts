@@ -1,3 +1,4 @@
+import { relative } from 'path'
 import { input, select, checkbox, confirm, password } from '@inquirer/prompts'
 import { detectClients, type McpClient } from './detect-clients.js'
 import { validateGitLabCredentials } from './validate-gitlab.js'
@@ -25,7 +26,10 @@ export async function runInit(): Promise<void> {
     default: 'https://gitlab.com',
     validate: (value) => {
       try {
-        new URL(value)
+        const u = new URL(value)
+        if (!['http:', 'https:'].includes(u.protocol)) {
+          return 'URL must use http:// or https://'
+        }
         return true
       } catch {
         return 'Please enter a valid URL (e.g. https://gitlab.com)'
@@ -76,6 +80,7 @@ export async function runInit(): Promise<void> {
     envVarName = await input({
       message: 'Environment variable name:',
       default: 'GITLAB_PAT',
+      validate: (value) => /^[A-Z_][A-Z0-9_]*$/i.test(value) || 'Must be a valid env var name (letters, digits, underscores)',
     })
     useEnvVar = true
 
@@ -139,7 +144,10 @@ export async function runInit(): Promise<void> {
     if (result.success) {
       console.log(green(`  ✓ ${client.name}`) + dim(` → ${result.configPath}`))
       if (client.scope === 'project') {
-        projectScopedClients.push(client.configPath.split('/').pop() || '')
+        projectScopedClients.push(relative(cwd, client.configPath))
+      }
+      if (!useEnvVar && client.scope === 'global') {
+        console.log(dim(`  Note: PAT written in plaintext to ${result.configPath}. Consider using env var mode.`))
       }
     } else {
       console.log(red(`  ✗ ${client.name}: ${result.error}`))

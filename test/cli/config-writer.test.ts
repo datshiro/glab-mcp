@@ -12,6 +12,7 @@ vi.mock('fs', async () => {
     writeFileSync: vi.fn(),
     mkdirSync: vi.fn(),
     appendFileSync: vi.fn(),
+    chmodSync: vi.fn(),
   }
 })
 
@@ -40,7 +41,10 @@ describe('config-writer', () => {
 
   describe('writeConfig', () => {
     it('writes new config when no file exists', () => {
-      mockExistsSync.mockReturnValue(true) // directory exists
+      mockExistsSync.mockImplementation((p) => {
+        // Directory exists, config file does not
+        return String(p) === '/projects/myapp'
+      })
 
       const result = writeConfig(testClient, 'https://gitlab.com', 'glpat-xxx', false, 'GITLAB_PAT')
 
@@ -56,7 +60,7 @@ describe('config-writer', () => {
     })
 
     it('uses env var reference when useEnvVar is true', () => {
-      mockExistsSync.mockReturnValue(true)
+      mockExistsSync.mockImplementation((p) => String(p) === '/projects/myapp')
 
       const result = writeConfig(testClient, 'https://gitlab.com', '', true, 'MY_PAT')
 
@@ -108,13 +112,24 @@ describe('config-writer', () => {
     })
 
     it('returns error on write failure', () => {
-      mockExistsSync.mockReturnValue(true)
+      mockExistsSync.mockImplementation((p) => String(p) === '/projects/myapp')
       mockWriteFileSync.mockImplementation(() => { throw new Error('Permission denied') })
 
       const result = writeConfig(testClient, 'https://gitlab.com', 'glpat-xxx', false, 'GITLAB_PAT')
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('Permission denied')
+    })
+
+    it('returns error on malformed existing config', () => {
+      mockExistsSync.mockReturnValue(true)
+      mockReadFileSync.mockReturnValue('{ invalid json }')
+
+      const result = writeConfig(testClient, 'https://gitlab.com', 'glpat-xxx', false, 'GITLAB_PAT')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('malformed JSON')
+      expect(mockWriteFileSync).not.toHaveBeenCalled()
     })
   })
 
