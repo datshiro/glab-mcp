@@ -1,0 +1,165 @@
+#!/usr/bin/env node
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { z } from 'zod'
+import { loadConfig } from './config.js'
+import { GitLabClient } from './gitlab-client.js'
+import { createMrTool, listMrsTool, commentMrTool, approveMrTool, mergeMrTool } from './tools/mr.js'
+import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool } from './tools/pipeline.js'
+import { shipMrTool, watchPipelineTool } from './tools/workflow.js'
+
+const config = loadConfig()
+const client = new GitLabClient(config.url, config.pat)
+
+const server = new McpServer({
+  name: 'glab-mcp',
+  version: '1.0.0',
+})
+
+// ── MR tools ──────────────────────────────────────────────────────────────────
+
+server.registerTool('create_mr', {
+  description: 'Create a GitLab merge request',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    source_branch: z.string().describe('Source branch name'),
+    target_branch: z.string().describe('Target branch name'),
+    title: z.string().describe('MR title'),
+    description: z.string().optional().describe('MR description'),
+  },
+}, async (args) => {
+  const result = await createMrTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('list_mrs', {
+  description: 'List merge requests for a project',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    state: z.enum(['opened', 'closed', 'merged', 'all']).optional().describe('Filter by state'),
+    author: z.string().optional().describe('Filter by author username'),
+    labels: z.string().optional().describe('Filter by labels (comma-separated)'),
+    page: z.number().int().min(1).optional().describe('Page number'),
+    per_page: z.number().int().min(1).max(100).optional().describe('Items per page'),
+  },
+}, async (args) => {
+  const result = await listMrsTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('comment_mr', {
+  description: 'Post a comment on a merge request',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    mr_iid: z.number().int().describe('MR internal ID'),
+    body: z.string().describe('Comment body'),
+  },
+}, async (args) => {
+  const result = await commentMrTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('approve_mr', {
+  description: 'Approve a merge request',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    mr_iid: z.number().int().describe('MR internal ID'),
+  },
+}, async (args) => {
+  const result = await approveMrTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('merge_mr', {
+  description: 'Merge a merge request',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    mr_iid: z.number().int().describe('MR internal ID'),
+    merge_commit_message: z.string().optional().describe('Custom merge commit message'),
+  },
+}, async (args) => {
+  const result = await mergeMrTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+// ── Pipeline tools ─────────────────────────────────────────────────────────────
+
+server.registerTool('get_pipeline_status', {
+  description: 'Get the latest pipeline status for a branch',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    ref: z.string().optional().describe('Branch/tag name (defaults to current git branch in working_dir)'),
+    working_dir: z.string().optional().describe('Path to git repo for auto-detecting current branch'),
+  },
+}, async (args) => {
+  const result = await getPipelineStatusTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('get_pipeline_errors', {
+  description: 'Get error logs from failed pipeline jobs',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    pipeline_id: z.number().int().describe('Pipeline ID'),
+    tail_lines: z.number().int().min(1).max(500).optional().describe('Number of log lines to return per job (default: 100)'),
+  },
+}, async (args) => {
+  const result = await getPipelineErrorsTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('list_pipeline_jobs', {
+  description: 'List all jobs in a pipeline',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    pipeline_id: z.number().int().describe('Pipeline ID'),
+  },
+}, async (args) => {
+  const result = await listPipelineJobsTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('retry_pipeline', {
+  description: 'Retry a failed pipeline',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    pipeline_id: z.number().int().describe('Pipeline ID'),
+  },
+}, async (args) => {
+  const result = await retryPipelineTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+// ── Workflow tools ─────────────────────────────────────────────────────────────
+
+server.registerTool('ship_mr', {
+  description: 'Stage all changes, commit, push, and create a GitLab MR in one step. Aborts if secret files (.env, *.pem, etc.) are detected.',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    target_branch: z.string().describe('Target branch for the MR (e.g. main)'),
+    title: z.string().describe('MR title (also used as commit message if commit_message is not set)'),
+    commit_message: z.string().optional().describe('Commit message (overrides title for the commit)'),
+    description: z.string().optional().describe('MR description'),
+    working_dir: z.string().optional().describe('Path to git repo (defaults to process.cwd())'),
+  },
+}, async (args) => {
+  const result = await shipMrTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('watch_pipeline', {
+  description: 'Poll a pipeline until it reaches a terminal state (success/failed/canceled) or times out. Returns error logs on failure.',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    pipeline_id: z.number().int().describe('Pipeline ID to watch'),
+    timeout_minutes: z.number().min(0.1).max(120).optional().describe('Max minutes to wait (default: 30)'),
+  },
+}, async (args) => {
+  const result = await watchPipelineTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+// ── Start ──────────────────────────────────────────────────────────────────────
+
+const transport = new StdioServerTransport()
+await server.connect(transport)
