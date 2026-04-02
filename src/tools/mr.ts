@@ -6,7 +6,7 @@ function encodeId(id: number | string): string {
 
 export async function createMrTool(
   client: GitLabClient,
-  args: { project_id: number | string; source_branch: string; target_branch: string; title: string; description?: string }
+  args: { project_id: number | string; source_branch: string; target_branch: string; title: string; description?: string; labels?: string }
 ) {
   const mr = await client.request<{ web_url: string; iid: number }>(
     `/api/v4/projects/${encodeId(args.project_id)}/merge_requests`,
@@ -17,10 +17,28 @@ export async function createMrTool(
         target_branch: args.target_branch,
         title: args.title,
         description: args.description,
+        labels: args.labels,
       }),
     }
   )
   return { url: mr.web_url, iid: mr.iid }
+}
+
+export async function updateMrTool(
+  client: GitLabClient,
+  args: { project_id: number | string; mr_iid: number; title?: string; description?: string; labels?: string; target_branch?: string }
+) {
+  const body: Record<string, unknown> = {}
+  if (args.title !== undefined) body.title = args.title
+  if (args.description !== undefined) body.description = args.description
+  if (args.labels !== undefined) body.labels = args.labels
+  if (args.target_branch !== undefined) body.target_branch = args.target_branch
+
+  const mr = await client.request<{ web_url: string; iid: number; state: string }>(
+    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}`,
+    { method: 'PUT', body: JSON.stringify(body) }
+  )
+  return { url: mr.web_url, iid: mr.iid, state: mr.state }
 }
 
 export async function listMrsTool(
@@ -39,12 +57,26 @@ export async function listMrsTool(
   )
 }
 
+export async function listLabelsTool(
+  client: GitLabClient,
+  args: { project_id: number | string; search?: string; page?: number; per_page?: number }
+) {
+  const params = new URLSearchParams()
+  if (args.search) params.set('search', args.search)
+  params.set('page', String(args.page ?? 1))
+  params.set('per_page', String(args.per_page ?? 20))
+
+  return client.request<{ name: string; color: string; description: string | null }[]>(
+    `/api/v4/projects/${encodeId(args.project_id)}/labels?${params}`
+  )
+}
+
 export async function commentMrTool(
   client: GitLabClient,
   args: { project_id: number | string; mr_iid: number; body: string }
 ) {
   return client.request<{ id: number }>(
-    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${args.mr_iid}/notes`,
+    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}/notes`,
     { method: 'POST', body: JSON.stringify({ body: args.body }) }
   )
 }
@@ -54,7 +86,7 @@ export async function approveMrTool(
   args: { project_id: number | string; mr_iid: number }
 ) {
   return client.request<{ approved: boolean }>(
-    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${args.mr_iid}/approve`,
+    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}/approve`,
     { method: 'POST' }
   )
 }
@@ -64,7 +96,7 @@ export async function mergeMrTool(
   args: { project_id: number | string; mr_iid: number; merge_commit_message?: string }
 ) {
   return client.request<{ iid: number; state: string; web_url: string }>(
-    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${args.mr_iid}/merge`,
+    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}/merge`,
     {
       method: 'PUT',
       body: JSON.stringify({ merge_commit_message: args.merge_commit_message }),

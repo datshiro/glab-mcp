@@ -12,7 +12,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { loadConfig } from './config.js'
 import { GitLabClient } from './gitlab-client.js'
-import { createMrTool, listMrsTool, commentMrTool, approveMrTool, mergeMrTool } from './tools/mr.js'
+import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool } from './tools/mr.js'
 import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool } from './tools/pipeline.js'
 import { shipMrTool, watchPipelineTool } from './tools/workflow.js'
 
@@ -68,9 +68,25 @@ server.registerTool('create_mr', {
     target_branch: z.string().describe('Target branch name'),
     title: z.string().describe('MR title'),
     description: z.string().optional().describe('MR description'),
+    labels: z.string().optional().describe('Comma-separated labels'),
   },
 }, async (args) => {
   const result = await createMrTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('update_mr', {
+  description: 'Update a GitLab merge request',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    mr_iid: z.number().int().describe('MR internal ID'),
+    title: z.string().optional().describe('New MR title'),
+    description: z.string().optional().describe('New MR description'),
+    labels: z.string().optional().describe('Comma-separated labels'),
+    target_branch: z.string().optional().describe('New target branch'),
+  },
+}, async (args) => {
+  const result = await updateMrTool(client, args)
   return { content: [{ type: 'text', text: JSON.stringify(result) }] }
 })
 
@@ -86,6 +102,19 @@ server.registerTool('list_mrs', {
   },
 }, async (args) => {
   const result = await listMrsTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('list_labels', {
+  description: 'List labels for a GitLab project',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    search: z.string().optional().describe('Filter labels by name'),
+    page: z.number().int().min(1).optional().describe('Page number'),
+    per_page: z.number().int().min(1).max(100).optional().describe('Items per page'),
+  },
+}, async (args) => {
+  const result = await listLabelsTool(client, args)
   return { content: [{ type: 'text', text: JSON.stringify(result) }] }
 })
 
