@@ -1,4 +1,12 @@
 #!/usr/bin/env node
+
+// Subcommand routing — must run before the TTY check
+if (process.argv[2] === 'init') {
+  const { runInit } = await import('./cli/init.js')
+  await runInit()
+  process.exit(0)
+}
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
@@ -16,13 +24,17 @@ This process communicates over stdin/stdout using the MCP protocol.
 It is meant to be launched by an MCP client (Claude Code, Claude Desktop, Cursor),
 not run directly in a terminal.
 
-Add it to your MCP client config:
+Quick setup:
+
+  npx glab-mcp init
+
+Or add it to your MCP client config manually:
 
   {
     "mcpServers": {
       "gitlab": {
         "command": "npx",
-        "args": ["glab-mcp"],
+        "args": ["-y", "glab-mcp"],
         "env": {
           "GITLAB_URL": "https://gitlab.com",
           "GITLAB_PAT": "glpat-xxxx"
