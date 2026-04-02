@@ -31,12 +31,12 @@ describe('get_pipeline_status', () => {
     expect(result).toBeNull()
   })
 
-  it('queries with the provided ref', async () => {
+  it('passes ref with slash unencoded so GitLab can match branch names', async () => {
     const client = makeClient({ request: vi.fn().mockResolvedValue([]) })
     await getPipelineStatusTool(client, { project_id: 42, ref: 'feat/my-branch' })
     const calledUrl = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
-    // ref value appears encoded or raw depending on URLSearchParams implementation
-    expect(calledUrl).toMatch(/feat(%2F|\/)my-branch/)
+    expect(calledUrl).toContain('ref=feat/my-branch')
+    expect(calledUrl).not.toContain('%2F')
   })
 })
 

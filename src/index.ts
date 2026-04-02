@@ -8,6 +8,36 @@ import { createMrTool, listMrsTool, commentMrTool, approveMrTool, mergeMrTool } 
 import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool } from './tools/pipeline.js'
 import { shipMrTool, watchPipelineTool } from './tools/workflow.js'
 
+// When run directly in a terminal (not piped by an MCP client), explain how to use it.
+if (process.stdin.isTTY) {
+  console.log(`glab-mcp — GitLab MCP server
+
+This process communicates over stdin/stdout using the MCP protocol.
+It is meant to be launched by an MCP client (Claude Code, Claude Desktop, Cursor),
+not run directly in a terminal.
+
+Add it to your MCP client config:
+
+  {
+    "mcpServers": {
+      "gitlab": {
+        "command": "npx",
+        "args": ["glab-mcp"],
+        "env": {
+          "GITLAB_URL": "https://gitlab.com",
+          "GITLAB_PAT": "glpat-xxxx"
+        }
+      }
+    }
+  }
+
+Required environment variables:
+  GITLAB_URL   Your GitLab instance URL (e.g. https://gitlab.com)
+  GITLAB_PAT   Personal Access Token with api scope
+`)
+  process.exit(0)
+}
+
 const config = loadConfig()
 const client = new GitLabClient(config.url, config.pat)
 
@@ -163,3 +193,4 @@ server.registerTool('watch_pipeline', {
 
 const transport = new StdioServerTransport()
 await server.connect(transport)
+process.stderr.write(`glab-mcp: connected to ${config.url}\n`)

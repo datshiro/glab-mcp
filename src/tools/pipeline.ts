@@ -27,10 +27,12 @@ export async function getPipelineStatusTool(
     // For pure API tools, ref is required when working_dir git detection is not possible
   }
   const params = new URLSearchParams({ per_page: '1', order_by: 'id', sort: 'desc' })
-  if (ref) params.set('ref', ref)
+  // Append ref without encoding slashes — GitLab matches branch names literally
+  // and some instances don't decode %2F in query params, causing null results.
+  const refSuffix = ref ? `&ref=${ref.split('/').map(encodeURIComponent).join('/')}` : ''
 
   const pipelines = await client.request<Pipeline[]>(
-    `/api/v4/projects/${encodeId(args.project_id)}/pipelines?${params}`
+    `/api/v4/projects/${encodeId(args.project_id)}/pipelines?${params}${refSuffix}`
   )
   return pipelines[0] ?? null
 }
@@ -47,7 +49,7 @@ export async function getPipelineErrorsTool(
   const failedJobs = jobs.filter(j => j.status === 'failed')
   const results = await Promise.all(
     failedJobs.map(async job => {
-      const rawLog = await client.getJobTrace(job.id)
+      const rawLog = await client.getJobTrace(args.project_id, job.id)
       const lines = rawLog.split('\n')
       const log = lines.slice(-tailLines).join('\n')
       return { job: job.name, stage: job.stage, log }

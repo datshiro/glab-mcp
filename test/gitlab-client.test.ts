@@ -106,7 +106,7 @@ describe('GitLabClient', () => {
     expect(err.message).toContain('Network error')
   })
 
-  it('uses Range header for partial log fetch', async () => {
+  it('uses project-scoped endpoint with Range header for partial log fetch', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 206,
@@ -116,10 +116,10 @@ describe('GitLabClient', () => {
     vi.stubGlobal('fetch', mockFetch)
 
     const client = new GitLabClient(BASE, PAT)
-    const log = await client.getJobTrace(42, 8192)
+    const log = await client.getJobTrace(99, 42, 8192)
 
     expect(mockFetch).toHaveBeenCalledWith(
-      `${BASE}/api/v4/jobs/42/trace`,
+      `${BASE}/api/v4/projects/99/jobs/42/trace`,
       expect.objectContaining({
         headers: expect.objectContaining({ Range: 'bytes=-8192' }),
       })

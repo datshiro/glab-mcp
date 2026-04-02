@@ -1,3 +1,7 @@
+function encodeId(id: number | string): string {
+  return typeof id === 'string' ? encodeURIComponent(id) : String(id)
+}
+
 export class GitLabError extends Error {
   constructor(
     message: string,
@@ -61,8 +65,8 @@ export class GitLabClient {
     throw new GitLabError('GitLab API error 429: Rate limit exceeded after 3 retries', 429)
   }
 
-  async getJobTrace(jobId: number, tailBytes = 8192): Promise<string> {
-    const url = `${this.baseUrl}/api/v4/jobs/${jobId}/trace`
+  async getJobTrace(projectId: number | string, jobId: number, tailBytes = 8192): Promise<string> {
+    const url = `${this.baseUrl}/api/v4/projects/${encodeId(projectId)}/jobs/${jobId}/trace`
     let response: Response
     try {
       response = await fetch(url, {

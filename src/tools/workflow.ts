@@ -189,7 +189,7 @@ async function getFailedJobErrors(
   const failed = jobs.filter(j => j.status === 'failed')
   return Promise.all(
     failed.map(async job => {
-      const log = await client.getJobTrace(job.id)
+      const log = await client.getJobTrace(projectId, job.id)
       return { job: job.name, stage: job.stage, log }
     })
   )
