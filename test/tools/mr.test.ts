@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GitLabClient } from '../../src/gitlab-client.js'
-import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool } from '../../src/tools/mr.js'
+import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, getMrStatusChecksTool } from '../../src/tools/mr.js'
 
 function makeClient(responses: Record<string, unknown> = {}) {
   return {
@@ -156,5 +156,76 @@ describe('merge_mr', () => {
       expect.stringContaining('merge'),
       expect.objectContaining({ body: expect.stringContaining('Merging feat/x') })
     )
+  })
+})
+
+describe('list_mr_discussions', () => {
+  it('returns discussion threads', async () => {
+    const discussions = [
+      { id: 'abc', notes: [{ id: 1, author: { username: 'dev' }, body: 'LGTM', created_at: '2026-01-01', resolvable: false, resolved: false }] },
+    ]
+    const client = makeClient({ 'discussions': discussions })
+    const result = await listMrDiscussionsTool(client, { project_id: 42, mr_iid: 1 })
+    expect(result).toHaveLength(1)
+    expect(result[0].notes[0].body).toBe('LGTM')
+  })
+
+  it('returns empty array when no discussions', async () => {
+    const client = makeClient({ 'discussions': [] })
+    const result = await listMrDiscussionsTool(client, { project_id: 42, mr_iid: 1 })
+    expect(result).toEqual([])
+  })
+
+  it('passes pagination params', async () => {
+    const client = makeClient({ 'discussions': [] })
+    await listMrDiscussionsTool(client, { project_id: 42, mr_iid: 1, page: 2, per_page: 50 })
+    const calledUrl = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(calledUrl).toContain('page=2')
+    expect(calledUrl).toContain('per_page=50')
+  })
+})
+
+describe('get_mr_status_checks', () => {
+  it('fetches MR sha then returns commit statuses', async () => {
+    const client = {
+      request: vi.fn()
+        .mockResolvedValueOnce({ sha: 'abc123' })
+        .mockResolvedValueOnce([
+          { name: 'sonarqube', status: 'success', target_url: 'https://sonar.example.com/report', description: 'Passed', created_at: '2026-01-01' },
+        ]),
+      getJobTrace: vi.fn(),
+    } as unknown as GitLabClient
+    const result = await getMrStatusChecksTool(client, { project_id: 42, mr_iid: 1 })
+    expect(result).toHaveLength(1)
+    expect(result[0].target_url).toBe('https://sonar.example.com/report')
+  })
+
+  it('filters statuses by name_filter (case-insensitive)', async () => {
+    const client = {
+      request: vi.fn()
+        .mockResolvedValueOnce({ sha: 'abc123' })
+        .mockResolvedValueOnce([
+          { name: 'SonarQube', status: 'success', target_url: 'https://sonar.example.com', description: null, created_at: '2026-01-01' },
+          { name: 'coverage', status: 'success', target_url: 'https://cov.example.com', description: null, created_at: '2026-01-01' },
+        ]),
+      getJobTrace: vi.fn(),
+    } as unknown as GitLabClient
+    const result = await getMrStatusChecksTool(client, { project_id: 42, mr_iid: 1, name_filter: 'sonar' })
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('SonarQube')
+  })
+
+  it('returns all statuses when no name_filter', async () => {
+    const client = {
+      request: vi.fn()
+        .mockResolvedValueOnce({ sha: 'abc123' })
+        .mockResolvedValueOnce([
+          { name: 'sonar', status: 'success', target_url: null, description: null, created_at: '2026-01-01' },
+          { name: 'coverage', status: 'failed', target_url: null, description: null, created_at: '2026-01-01' },
+        ]),
+      getJobTrace: vi.fn(),
+    } as unknown as GitLabClient
+    const result = await getMrStatusChecksTool(client, { project_id: 42, mr_iid: 1 })
+    expect(result).toHaveLength(2)
   })
 })

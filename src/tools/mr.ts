@@ -103,3 +103,61 @@ export async function mergeMrTool(
     }
   )
 }
+
+interface DiscussionNote {
+  id: number
+  author: { username: string }
+  body: string
+  created_at: string
+  resolvable: boolean
+  resolved: boolean
+  position?: { new_path?: string; new_line?: number; old_path?: string; old_line?: number }
+}
+
+interface Discussion {
+  id: string
+  notes: DiscussionNote[]
+}
+
+export async function listMrDiscussionsTool(
+  client: GitLabClient,
+  args: { project_id: number | string; mr_iid: number; page?: number; per_page?: number }
+) {
+  const params = new URLSearchParams()
+  params.set('page', String(args.page ?? 1))
+  params.set('per_page', String(args.per_page ?? 20))
+
+  return client.request<Discussion[]>(
+    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}/discussions?${params}`
+  )
+}
+
+interface CommitStatus {
+  name: string
+  status: string
+  target_url: string | null
+  description: string | null
+  created_at: string
+}
+
+export async function getMrStatusChecksTool(
+  client: GitLabClient,
+  args: { project_id: number | string; mr_iid: number; name_filter?: string }
+) {
+  // Fetch MR to get HEAD sha
+  const mr = await client.request<{ sha: string }>(
+    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}`
+  )
+
+  // Fetch commit statuses for that sha
+  const statuses = await client.request<CommitStatus[]>(
+    `/api/v4/projects/${encodeId(args.project_id)}/repository/commits/${mr.sha}/statuses`
+  )
+
+  if (args.name_filter) {
+    const filter = args.name_filter.toLowerCase()
+    return statuses.filter(s => s.name.toLowerCase().includes(filter))
+  }
+
+  return statuses
+}

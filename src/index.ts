@@ -12,8 +12,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { loadConfig } from './config.js'
 import { GitLabClient } from './gitlab-client.js'
-import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool } from './tools/mr.js'
-import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool } from './tools/pipeline.js'
+import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, getMrStatusChecksTool } from './tools/mr.js'
+import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool, getJobDetailTool } from './tools/pipeline.js'
 import { shipMrTool, watchPipelineTool } from './tools/workflow.js'
 
 // When run directly in a terminal (not piped by an MCP client), explain how to use it.
@@ -153,6 +153,31 @@ server.registerTool('merge_mr', {
   return { content: [{ type: 'text', text: JSON.stringify(result) }] }
 })
 
+server.registerTool('list_mr_discussions', {
+  description: 'List discussion threads on a merge request (includes inline code comments and resolve status)',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    mr_iid: z.number().int().describe('MR internal ID'),
+    page: z.number().int().min(1).optional().describe('Page number'),
+    per_page: z.number().int().min(1).max(100).optional().describe('Items per page'),
+  },
+}, async (args) => {
+  const result = await listMrDiscussionsTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('get_mr_status_checks', {
+  description: 'Get external status checks (SonarQube, coverage, security scanners) for a merge request. Returns status name, state, and report URL.',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    mr_iid: z.number().int().describe('MR internal ID'),
+    name_filter: z.string().optional().describe('Case-insensitive filter on status name (e.g. "sonar")'),
+  },
+}, async (args) => {
+  const result = await getMrStatusChecksTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
 // ── Pipeline tools ─────────────────────────────────────────────────────────────
 
 server.registerTool('get_pipeline_status', {
@@ -198,6 +223,19 @@ server.registerTool('retry_pipeline', {
   },
 }, async (args) => {
   const result = await retryPipelineTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('get_job_detail', {
+  description: 'Get full details of a pipeline job including status, duration, runner, coverage, artifacts, and optionally the trace log',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    job_id: z.number().int().describe('Job ID'),
+    include_trace: z.boolean().optional().describe('Include the job trace/log (default: false)'),
+    tail_lines: z.number().int().min(1).max(500).optional().describe('Number of log lines to return (default: 100, requires include_trace)'),
+  },
+}, async (args) => {
+  const result = await getJobDetailTool(client, args)
   return { content: [{ type: 'text', text: JSON.stringify(result) }] }
 })
 

@@ -76,3 +76,36 @@ export async function retryPipelineTool(
     { method: 'POST' }
   )
 }
+
+interface JobDetail {
+  id: number
+  name: string
+  status: string
+  stage: string
+  duration: number | null
+  started_at: string | null
+  finished_at: string | null
+  coverage: number | null
+  web_url: string
+  runner: { id: number; description: string } | null
+  artifacts_file: { filename: string; size: number } | null
+}
+
+export async function getJobDetailTool(
+  client: GitLabClient,
+  args: { project_id: number | string; job_id: number; include_trace?: boolean; tail_lines?: number }
+) {
+  const job = await client.request<JobDetail>(
+    `/api/v4/projects/${encodeId(args.project_id)}/jobs/${args.job_id}`
+  )
+
+  if (args.include_trace) {
+    const tailLines = args.tail_lines ?? 100
+    const rawLog = await client.getJobTrace(args.project_id, args.job_id)
+    const lines = rawLog.split('\n')
+    const trace = lines.slice(-tailLines).join('\n')
+    return { ...job, trace }
+  }
+
+  return job
+}

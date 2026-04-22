@@ -5,6 +5,7 @@ import {
   getPipelineErrorsTool,
   listPipelineJobsTool,
   retryPipelineTool,
+  getJobDetailTool,
 } from '../../src/tools/pipeline.js'
 
 function makeClient(overrides: Partial<GitLabClient> = {}) {
@@ -105,5 +106,52 @@ describe('retry_pipeline', () => {
     const result = await retryPipelineTool(client, { project_id: 42, pipeline_id: 10 })
     expect(result.id).toBe(11)
     expect(result.status).toBe('running')
+  })
+})
+
+describe('get_job_detail', () => {
+  const jobData = {
+    id: 5,
+    name: 'test',
+    status: 'success',
+    stage: 'test',
+    duration: 120,
+    started_at: '2026-01-01T00:00:00Z',
+    finished_at: '2026-01-01T00:02:00Z',
+    coverage: 85.5,
+    web_url: 'https://gl.example.com/jobs/5',
+    runner: { id: 1, description: 'shared-runner' },
+    artifacts_file: { filename: 'artifacts.zip', size: 1024 },
+  }
+
+  it('returns job metadata without trace by default', async () => {
+    const client = makeClient({ request: vi.fn().mockResolvedValue(jobData) })
+    const result = await getJobDetailTool(client, { project_id: 42, job_id: 5 })
+    expect(result.id).toBe(5)
+    expect(result.status).toBe('success')
+    expect(result.coverage).toBe(85.5)
+    expect(result.runner.description).toBe('shared-runner')
+    expect(result).not.toHaveProperty('trace')
+    expect(client.getJobTrace).not.toHaveBeenCalled()
+  })
+
+  it('includes trace when include_trace is true', async () => {
+    const client = makeClient({
+      request: vi.fn().mockResolvedValue(jobData),
+      getJobTrace: vi.fn().mockResolvedValue('line1\nline2\nline3\n'),
+    })
+    const result = await getJobDetailTool(client, { project_id: 42, job_id: 5, include_trace: true })
+    expect(result.trace).toContain('line1')
+    expect(client.getJobTrace).toHaveBeenCalledWith(42, 5)
+  })
+
+  it('respects tail_lines for trace', async () => {
+    const logLines = Array(200).fill('log line').join('\n')
+    const client = makeClient({
+      request: vi.fn().mockResolvedValue(jobData),
+      getJobTrace: vi.fn().mockResolvedValue(logLines),
+    })
+    const result = await getJobDetailTool(client, { project_id: 42, job_id: 5, include_trace: true, tail_lines: 10 })
+    expect(result.trace.split('\n').length).toBeLessThanOrEqual(11)
   })
 })
