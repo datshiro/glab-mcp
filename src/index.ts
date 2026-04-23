@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { loadConfig } from './config.js'
 import { GitLabClient } from './gitlab-client.js'
 import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, getMrStatusChecksTool } from './tools/mr.js'
-import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool, getJobDetailTool } from './tools/pipeline.js'
+import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool, getJobDetailTool, playJobTool, watchJobTool } from './tools/pipeline.js'
 import { shipMrTool, watchPipelineTool } from './tools/workflow.js'
 
 // When run directly in a terminal (not piped by an MCP client), explain how to use it.
@@ -236,6 +236,30 @@ server.registerTool('get_job_detail', {
   },
 }, async (args) => {
   const result = await getJobDetailTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('play_job', {
+  description: 'Trigger a manual pipeline job (e.g. deploy-stag-sea, deploy-service-on-test)',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    job_id: z.number().int().describe('Job ID to trigger'),
+  },
+}, async (args) => {
+  const result = await playJobTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('watch_job', {
+  description: 'Poll a single job until it reaches a terminal state (success/failed/canceled) or times out. Returns trace log on failure.',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    job_id: z.number().int().describe('Job ID to watch'),
+    timeout_minutes: z.number().min(0.1).max(120).optional().describe('Max minutes to wait (default: 30)'),
+    include_trace_on_failure: z.boolean().optional().describe('Include job trace log on failure (default: true)'),
+  },
+}, async (args) => {
+  const result = await watchJobTool(client, args)
   return { content: [{ type: 'text', text: JSON.stringify(result) }] }
 })
 

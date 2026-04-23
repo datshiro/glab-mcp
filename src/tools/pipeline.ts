@@ -109,3 +109,91 @@ export async function getJobDetailTool(
 
   return job
 }
+
+// Trigger a manual job (e.g. deploy-stag-sea)
+export async function playJobTool(
+  client: GitLabClient,
+  args: { project_id: number | string; job_id: number }
+) {
+  return client.request<JobDetail>(
+    `/api/v4/projects/${encodeId(args.project_id)}/jobs/${args.job_id}/play`,
+    { method: 'POST' }
+  )
+}
+
+// Poll a single job until it reaches a terminal state
+interface WatchJobResult {
+  status: string
+  job_id: number
+  name?: string
+  stage?: string
+  web_url?: string
+  duration?: number | null
+  trace?: string
+  message?: string
+}
+
+export async function watchJobTool(
+  client: GitLabClient,
+  args: { project_id: number | string; job_id: number; timeout_minutes?: number; include_trace_on_failure?: boolean }
+): Promise<WatchJobResult> {
+  const timeoutMs = (args.timeout_minutes ?? 30) * 60 * 1000
+  const pollIntervalMs = 10_000
+  const deadline = Date.now() + timeoutMs
+  const maxApiErrors = 3
+  let apiErrors = 0
+
+  const TERMINAL = ['success', 'failed', 'canceled', 'skipped']
+
+  while (true) {
+    try {
+      const job = await client.request<JobDetail>(
+        `/api/v4/projects/${encodeId(args.project_id)}/jobs/${args.job_id}`
+      )
+
+      if (TERMINAL.includes(job.status)) {
+        const result: WatchJobResult = {
+          status: job.status,
+          job_id: job.id,
+          name: job.name,
+          stage: job.stage,
+          web_url: job.web_url,
+          duration: job.duration,
+        }
+
+        if (job.status === 'failed' && args.include_trace_on_failure !== false) {
+          const rawLog = await client.getJobTrace(args.project_id, args.job_id)
+          const lines = rawLog.split('\n')
+          result.trace = lines.slice(-100).join('\n')
+        }
+
+        return result
+      }
+
+      apiErrors = 0
+    } catch (err) {
+      apiErrors++
+      if (apiErrors >= maxApiErrors) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { status: 'error', job_id: args.job_id, message: msg }
+      }
+    }
+
+    if (Date.now() >= deadline) {
+      try {
+        const job = await client.request<JobDetail>(
+          `/api/v4/projects/${encodeId(args.project_id)}/jobs/${args.job_id}`
+        )
+        return {
+          status: 'timeout', job_id: job.id, name: job.name, stage: job.stage,
+          web_url: job.web_url,
+          message: `Timed out after ${args.timeout_minutes ?? 30} minutes (last status: ${job.status})`,
+        }
+      } catch {
+        return { status: 'timeout', job_id: args.job_id, message: `Timed out after ${args.timeout_minutes ?? 30} minutes` }
+      }
+    }
+
+    await new Promise(r => setTimeout(r, pollIntervalMs))
+  }
+}
