@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { z } from 'zod'
 import { GitLabClient } from '../../src/gitlab-client.js'
 import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, getMrStatusChecksTool } from '../../src/tools/mr.js'
 
@@ -182,6 +185,32 @@ describe('list_mr_discussions', () => {
     const calledUrl = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
     expect(calledUrl).toContain('page=2')
     expect(calledUrl).toContain('per_page=50')
+  })
+})
+
+// Regression test for stringified-integer rejection from MCP transport
+// (see plans/260426-1520-mcp-int-coercion). Some MCP clients send numeric
+// JSON values as strings before their typed-schema cache is warm. All numeric
+// input fields must use z.coerce.number() so the schema accepts "3" as 3.
+describe('schema coercion (issue: stringified integers from MCP transport)', () => {
+  it('z.coerce.number().int() coerces string inputs and still rejects non-numeric/floats', () => {
+    const schema = z.coerce.number().int()
+    expect(schema.safeParse('3').success).toBe(true)
+    expect(schema.parse('3')).toBe(3)
+    expect(schema.safeParse(3).success).toBe(true)
+    expect(schema.safeParse('abc').success).toBe(false)
+    expect(schema.safeParse(3.5).success).toBe(false)
+  })
+
+  it('src/index.ts: every numeric input field uses z.coerce.number() (no bare z.number() outside unions)', () => {
+    const src = readFileSync(resolve(process.cwd(), 'src/index.ts'), 'utf8')
+    // The only legitimate bare z.number() is inside the project_id union.
+    const stripped = src.replace(/z\.union\(\[z\.number\(\), z\.string\(\)\]\)/g, '__UNION__')
+    const remaining = stripped.match(/z\.number\(/g)
+    expect(
+      remaining,
+      'bare z.number() must be z.coerce.number() — see plans/260426-1520-mcp-int-coercion',
+    ).toBeNull()
   })
 })
 

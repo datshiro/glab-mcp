@@ -79,7 +79,7 @@ server.registerTool('update_mr', {
   description: 'Update a GitLab merge request',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.number().int().describe('MR internal ID'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID'),
     title: z.string().optional().describe('New MR title'),
     description: z.string().optional().describe('New MR description'),
     labels: z.string().optional().describe('Comma-separated labels'),
@@ -97,8 +97,8 @@ server.registerTool('list_mrs', {
     state: z.enum(['opened', 'closed', 'merged', 'all']).optional().describe('Filter by state'),
     author: z.string().optional().describe('Filter by author username'),
     labels: z.string().optional().describe('Filter by labels (comma-separated)'),
-    page: z.number().int().min(1).optional().describe('Page number'),
-    per_page: z.number().int().min(1).max(100).optional().describe('Items per page'),
+    page: z.coerce.number().int().min(1).optional().describe('Page number'),
+    per_page: z.coerce.number().int().min(1).max(100).optional().describe('Items per page'),
   },
 }, async (args) => {
   const result = await listMrsTool(client, args)
@@ -110,8 +110,8 @@ server.registerTool('list_labels', {
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
     search: z.string().optional().describe('Filter labels by name'),
-    page: z.number().int().min(1).optional().describe('Page number'),
-    per_page: z.number().int().min(1).max(100).optional().describe('Items per page'),
+    page: z.coerce.number().int().min(1).optional().describe('Page number'),
+    per_page: z.coerce.number().int().min(1).max(100).optional().describe('Items per page'),
   },
 }, async (args) => {
   const result = await listLabelsTool(client, args)
@@ -122,7 +122,7 @@ server.registerTool('comment_mr', {
   description: 'Post a comment on a merge request',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.number().int().describe('MR internal ID'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID'),
     body: z.string().describe('Comment body'),
   },
 }, async (args) => {
@@ -134,7 +134,7 @@ server.registerTool('approve_mr', {
   description: 'Approve a merge request',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.number().int().describe('MR internal ID'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID'),
   },
 }, async (args) => {
   const result = await approveMrTool(client, args)
@@ -145,7 +145,7 @@ server.registerTool('merge_mr', {
   description: 'Merge a merge request',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.number().int().describe('MR internal ID'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID'),
     merge_commit_message: z.string().optional().describe('Custom merge commit message'),
   },
 }, async (args) => {
@@ -157,9 +157,9 @@ server.registerTool('list_mr_discussions', {
   description: 'List discussion threads on a merge request (includes inline code comments and resolve status)',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.number().int().describe('MR internal ID'),
-    page: z.number().int().min(1).optional().describe('Page number'),
-    per_page: z.number().int().min(1).max(100).optional().describe('Items per page'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID'),
+    page: z.coerce.number().int().min(1).optional().describe('Page number'),
+    per_page: z.coerce.number().int().min(1).max(100).optional().describe('Items per page'),
   },
 }, async (args) => {
   const result = await listMrDiscussionsTool(client, args)
@@ -170,7 +170,7 @@ server.registerTool('get_mr_status_checks', {
   description: 'Get external status checks (SonarQube, coverage, security scanners) for a merge request. Returns status name, state, and report URL.',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.number().int().describe('MR internal ID'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID'),
     name_filter: z.string().optional().describe('Case-insensitive filter on status name (e.g. "sonar")'),
   },
 }, async (args) => {
@@ -196,8 +196,8 @@ server.registerTool('get_pipeline_errors', {
   description: 'Get error logs from failed pipeline jobs',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    pipeline_id: z.number().int().describe('Pipeline ID'),
-    tail_lines: z.number().int().min(1).max(500).optional().describe('Number of log lines to return per job (default: 100)'),
+    pipeline_id: z.coerce.number().int().describe('Pipeline ID'),
+    tail_lines: z.coerce.number().int().min(1).max(500).optional().describe('Number of log lines to return per job (default: 100)'),
   },
 }, async (args) => {
   const result = await getPipelineErrorsTool(client, args)
@@ -208,7 +208,7 @@ server.registerTool('list_pipeline_jobs', {
   description: 'List all jobs in a pipeline',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    pipeline_id: z.number().int().describe('Pipeline ID'),
+    pipeline_id: z.coerce.number().int().describe('Pipeline ID'),
   },
 }, async (args) => {
   const result = await listPipelineJobsTool(client, args)
@@ -219,7 +219,7 @@ server.registerTool('retry_pipeline', {
   description: 'Retry a failed pipeline',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    pipeline_id: z.number().int().describe('Pipeline ID'),
+    pipeline_id: z.coerce.number().int().describe('Pipeline ID'),
   },
 }, async (args) => {
   const result = await retryPipelineTool(client, args)
@@ -230,9 +230,9 @@ server.registerTool('get_job_detail', {
   description: 'Get full details of a pipeline job including status, duration, runner, coverage, artifacts, and optionally the trace log',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    job_id: z.number().int().describe('Job ID'),
+    job_id: z.coerce.number().int().describe('Job ID'),
     include_trace: z.boolean().optional().describe('Include the job trace/log (default: false)'),
-    tail_lines: z.number().int().min(1).max(500).optional().describe('Number of log lines to return (default: 100, requires include_trace)'),
+    tail_lines: z.coerce.number().int().min(1).max(500).optional().describe('Number of log lines to return (default: 100, requires include_trace)'),
   },
 }, async (args) => {
   const result = await getJobDetailTool(client, args)
@@ -243,7 +243,7 @@ server.registerTool('play_job', {
   description: 'Trigger a manual pipeline job (e.g. deploy-stag-sea, deploy-service-on-test)',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    job_id: z.number().int().describe('Job ID to trigger'),
+    job_id: z.coerce.number().int().describe('Job ID to trigger'),
   },
 }, async (args) => {
   const result = await playJobTool(client, args)
@@ -254,8 +254,8 @@ server.registerTool('watch_job', {
   description: 'Poll a single job until it reaches a terminal state (success/failed/canceled) or times out. Returns trace log on failure.',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    job_id: z.number().int().describe('Job ID to watch'),
-    timeout_minutes: z.number().min(0.1).max(120).optional().describe('Max minutes to wait (default: 30)'),
+    job_id: z.coerce.number().int().describe('Job ID to watch'),
+    timeout_minutes: z.coerce.number().min(0.1).max(120).optional().describe('Max minutes to wait (default: 30)'),
     include_trace_on_failure: z.boolean().optional().describe('Include job trace log on failure (default: true)'),
   },
 }, async (args) => {
@@ -284,8 +284,8 @@ server.registerTool('watch_pipeline', {
   description: 'Poll a pipeline until it reaches a terminal state (success/failed/canceled) or times out. Returns error logs on failure.',
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    pipeline_id: z.number().int().describe('Pipeline ID to watch'),
-    timeout_minutes: z.number().min(0.1).max(120).optional().describe('Max minutes to wait (default: 30)'),
+    pipeline_id: z.coerce.number().int().describe('Pipeline ID to watch'),
+    timeout_minutes: z.coerce.number().min(0.1).max(120).optional().describe('Max minutes to wait (default: 30)'),
   },
 }, async (args) => {
   const result = await watchPipelineTool(client, args)
