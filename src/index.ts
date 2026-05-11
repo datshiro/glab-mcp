@@ -61,9 +61,9 @@ const server = new McpServer({
 // ── MR tools ──────────────────────────────────────────────────────────────────
 
 server.registerTool('create_mr', {
-  description: 'Create a GitLab merge request',
+  description: 'Create a GitLab merge request. Use this when creating a new MR for a GitLab project path (e.g. "group/project" extracted from a GitLab URL like https://gitlab.example.com/group/project).',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" from https://gitlab.example.com/group/project/-/merge_requests/...)'),
     source_branch: z.string().describe('Source branch name'),
     target_branch: z.string().describe('Target branch name'),
     title: z.string().describe('MR title'),
@@ -76,10 +76,10 @@ server.registerTool('create_mr', {
 })
 
 server.registerTool('update_mr', {
-  description: 'Update a GitLab merge request',
+  description: 'Update a GitLab merge request. Use when given a GitLab MR URL — extract the project path and MR IID from it.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.coerce.number().int().describe('MR internal ID'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" from https://gitlab.example.com/group/project/-/merge_requests/...)'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
     title: z.string().optional().describe('New MR title'),
     description: z.string().optional().describe('New MR description'),
     labels: z.string().optional().describe('Comma-separated labels'),
@@ -91,9 +91,9 @@ server.registerTool('update_mr', {
 })
 
 server.registerTool('list_mrs', {
-  description: 'List merge requests for a project',
+  description: 'List merge requests for a GitLab project. Use when given a GitLab project URL or path — extract "namespace/project" from the URL as project_id.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" from https://gitlab.example.com/group/project/-/merge_requests/...)'),
     state: z.enum(['opened', 'closed', 'merged', 'all']).optional().describe('Filter by state'),
     author: z.string().optional().describe('Filter by author username'),
     labels: z.string().optional().describe('Filter by labels (comma-separated)'),
@@ -108,7 +108,7 @@ server.registerTool('list_mrs', {
 server.registerTool('list_labels', {
   description: 'List labels for a GitLab project',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" from https://gitlab.example.com/group/project/-/...)'),
     search: z.string().optional().describe('Filter labels by name'),
     page: z.coerce.number().int().min(1).optional().describe('Page number'),
     per_page: z.coerce.number().int().min(1).max(100).optional().describe('Items per page'),
@@ -119,10 +119,10 @@ server.registerTool('list_labels', {
 })
 
 server.registerTool('comment_mr', {
-  description: 'Post a comment on a merge request',
+  description: 'Post a comment on a merge request. Given a GitLab MR URL (https://gitlab.example.com/group/project/-/merge_requests/42), use "group/project" as project_id and 42 as mr_iid.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.coerce.number().int().describe('MR internal ID'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
     body: z.string().describe('Comment body'),
   },
 }, async (args) => {
@@ -131,10 +131,10 @@ server.registerTool('comment_mr', {
 })
 
 server.registerTool('approve_mr', {
-  description: 'Approve a merge request',
+  description: 'Approve a GitLab merge request. Given a GitLab MR URL, extract "group/project" as project_id and the trailing number as mr_iid.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.coerce.number().int().describe('MR internal ID'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
   },
 }, async (args) => {
   const result = await approveMrTool(client, args)
@@ -142,10 +142,10 @@ server.registerTool('approve_mr', {
 })
 
 server.registerTool('merge_mr', {
-  description: 'Merge a merge request',
+  description: 'Merge (pull/accept) a GitLab merge request. Given a GitLab MR URL, extract "group/project" as project_id and the trailing number as mr_iid.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.coerce.number().int().describe('MR internal ID'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
     merge_commit_message: z.string().optional().describe('Custom merge commit message'),
   },
 }, async (args) => {
@@ -154,10 +154,10 @@ server.registerTool('merge_mr', {
 })
 
 server.registerTool('list_mr_discussions', {
-  description: 'List discussion threads on a merge request (includes inline code comments and resolve status)',
+  description: 'List discussion threads on a GitLab merge request (includes inline code comments and resolve status). Use when given a GitLab MR URL — extract "group/project" as project_id and the MR number as mr_iid.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.coerce.number().int().describe('MR internal ID'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
     page: z.coerce.number().int().min(1).optional().describe('Page number'),
     per_page: z.coerce.number().int().min(1).max(100).optional().describe('Items per page'),
   },
@@ -167,10 +167,10 @@ server.registerTool('list_mr_discussions', {
 })
 
 server.registerTool('get_mr_status_checks', {
-  description: 'Get external status checks (SonarQube, coverage, security scanners) for a merge request. Returns status name, state, and report URL.',
+  description: 'Get external status checks (SonarQube, coverage, security scanners) for a GitLab merge request; returns status name, state, and report URL. Given a GitLab MR URL, extract "group/project" as project_id and the MR number as mr_iid.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
-    mr_iid: z.coerce.number().int().describe('MR internal ID'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
     name_filter: z.string().optional().describe('Case-insensitive filter on status name (e.g. "sonar")'),
   },
 }, async (args) => {
@@ -183,7 +183,7 @@ server.registerTool('get_mr_status_checks', {
 server.registerTool('get_pipeline_status', {
   description: 'Get the latest pipeline status for a branch',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     ref: z.string().optional().describe('Branch/tag name (defaults to current git branch in working_dir)'),
     working_dir: z.string().optional().describe('Path to git repo for auto-detecting current branch'),
   },
@@ -195,7 +195,7 @@ server.registerTool('get_pipeline_status', {
 server.registerTool('get_pipeline_errors', {
   description: 'Get error logs from failed pipeline jobs',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     pipeline_id: z.coerce.number().int().describe('Pipeline ID'),
     tail_lines: z.coerce.number().int().min(1).max(500).optional().describe('Number of log lines to return per job (default: 100)'),
   },
@@ -207,7 +207,7 @@ server.registerTool('get_pipeline_errors', {
 server.registerTool('list_pipeline_jobs', {
   description: 'List all jobs in a pipeline',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     pipeline_id: z.coerce.number().int().describe('Pipeline ID'),
   },
 }, async (args) => {
@@ -218,7 +218,7 @@ server.registerTool('list_pipeline_jobs', {
 server.registerTool('retry_pipeline', {
   description: 'Retry a failed pipeline',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     pipeline_id: z.coerce.number().int().describe('Pipeline ID'),
   },
 }, async (args) => {
@@ -229,7 +229,7 @@ server.registerTool('retry_pipeline', {
 server.registerTool('get_job_detail', {
   description: 'Get full details of a pipeline job including status, duration, runner, coverage, artifacts, and optionally the trace log',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     job_id: z.coerce.number().int().describe('Job ID'),
     include_trace: z.boolean().optional().describe('Include the job trace/log (default: false)'),
     tail_lines: z.coerce.number().int().min(1).max(500).optional().describe('Number of log lines to return (default: 100, requires include_trace)'),
@@ -242,7 +242,7 @@ server.registerTool('get_job_detail', {
 server.registerTool('play_job', {
   description: 'Trigger a manual pipeline job (e.g. deploy-stag-sea, deploy-service-on-test)',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     job_id: z.coerce.number().int().describe('Job ID to trigger'),
   },
 }, async (args) => {
@@ -253,7 +253,7 @@ server.registerTool('play_job', {
 server.registerTool('watch_job', {
   description: 'Poll a single job until it reaches a terminal state (success/failed/canceled) or times out. Returns trace log on failure.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     job_id: z.coerce.number().int().describe('Job ID to watch'),
     timeout_minutes: z.coerce.number().min(0.1).max(120).optional().describe('Max minutes to wait (default: 30)'),
     include_trace_on_failure: z.boolean().optional().describe('Include job trace log on failure (default: true)'),
@@ -268,7 +268,7 @@ server.registerTool('watch_job', {
 server.registerTool('ship_mr', {
   description: 'Stage all changes, commit, push, and create a GitLab MR in one step. Aborts if secret files (.env, *.pem, etc.) are detected.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     target_branch: z.string().describe('Target branch for the MR (e.g. main)'),
     title: z.string().describe('MR title (also used as commit message if commit_message is not set)'),
     commit_message: z.string().optional().describe('Commit message (overrides title for the commit)'),
@@ -283,7 +283,7 @@ server.registerTool('ship_mr', {
 server.registerTool('watch_pipeline', {
   description: 'Poll a pipeline until it reaches a terminal state (success/failed/canceled) or times out. Returns error logs on failure.',
   inputSchema: {
-    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path'),
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     pipeline_id: z.coerce.number().int().describe('Pipeline ID to watch'),
     timeout_minutes: z.coerce.number().min(0.1).max(120).optional().describe('Max minutes to wait (default: 30)'),
   },
