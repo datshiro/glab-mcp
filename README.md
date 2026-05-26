@@ -33,6 +33,7 @@ That's it. Restart your AI client and start using GitLab tools.
 | `create_mr` | Create a merge request |
 | `list_mrs` | List / filter MRs by state, author, or label |
 | `comment_mr` | Post a comment on an MR |
+| `post_review_findings` | Post a code-review report as anchored inline MR comments (reconciles on re-run) |
 | `approve_mr` | Approve an MR |
 | `merge_mr` | Merge an MR |
 | `get_pipeline_status` | Get the latest pipeline for a branch |
@@ -209,6 +210,57 @@ Returns `{ url, iid }`.
 | `working_dir` | string | No | Path to the git repo for auto-detecting the current branch |
 
 Returns the latest pipeline object or `null` if none found.
+
+---
+
+### `post_review_findings`
+
+Post a code-review report as inline anchored discussions on a GitLab MR. Each finding becomes one discussion thread on the exact `file:line`. Re-runs are idempotent: changed bodies update in place, stale findings auto-resolve, unchanged findings are skipped. Off-diff findings fall back to general MR notes — no information is lost.
+
+Designed to consume `/ck:code-review` output. Pass either structured `findings` (preferred) or a raw `report_markdown` string.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project_id` | number \| string | Yes | — | GitLab project ID or path |
+| `mr_iid` | number | Yes | — | MR internal ID |
+| `findings` | `Finding[]` | No\* | — | Structured array (see shape below) |
+| `report_markdown` | string | No\* | — | Fallback raw markdown; parser extracts `### [SEVERITY] path:line — title` headings |
+| `dedupe` | boolean | No | `true` | Reconcile against existing tool-tagged threads to avoid duplicates |
+| `auto_resolve_stale` | boolean | No | `true` | Resolve threads from previous runs that are not in the current findings |
+| `concurrency` | number | No | `4` | Max parallel GitLab API requests |
+
+\* Either `findings` or `report_markdown` should be provided.
+
+**`Finding` shape:**
+
+```ts
+{
+  file: string,                          // path matching the MR diff
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info',
+  title: string,
+  body: string,                          // markdown
+  new_line?: number,                     // for added/context lines
+  old_line?: number,                     // for deleted lines
+  suggestion?: string,                   // optional Apply-suggestion patch
+}
+```
+
+**Returns:**
+
+```ts
+{
+  inline:        [{ url, file, line, hash }],   // newly posted inline discussions
+  updated:       [{ url, file, line, hash }],   // existing threads whose body changed
+  unchanged:     [{ url, file, line, hash }],   // identical to last run — skipped
+  fallback:      [{ url, file, line, reason }], // posted as general MR notes
+  auto_resolved: [{ url, file, line, hash }],   // stale threads marked resolved
+  failed:        [{ file, line, error }],
+}
+```
+
+**Safety:** the tool only ever inspects, updates, or resolves threads carrying its own hidden marker (`<!-- glab-mcp-finding:HASH -->`). Human comments and other bots are never touched.
+
+**v1 scope:** single-line anchoring only. Multi-line ranges planned for v1.1.
 
 ---
 

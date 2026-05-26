@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { loadConfig } from './config.js'
 import { GitLabClient } from './gitlab-client.js'
 import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, getMrStatusChecksTool } from './tools/mr.js'
+import { postReviewFindingsTool } from './tools/mr-review.js'
 import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool, getJobDetailTool, playJobTool, watchJobTool } from './tools/pipeline.js'
 import { shipMrTool, watchPipelineTool } from './tools/workflow.js'
 
@@ -163,6 +164,30 @@ server.registerTool('list_mr_discussions', {
   },
 }, async (args) => {
   const result = await listMrDiscussionsTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('post_review_findings', {
+  description: 'Post a code-review report as anchored inline discussions on a GitLab MR. Each finding becomes one discussion thread on the exact file:line (supports `suggestion` blocks). Re-runs reconcile: updates changed bodies, auto-resolves stale findings, skips unchanged ones. Off-diff findings fall back to general MR notes. Given a GitLab MR URL, extract "group/project" as project_id and the trailing number as mr_iid.',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
+    findings: z.array(z.object({
+      file: z.string().describe('Path of the file containing the finding (must match the path in the MR diff)'),
+      severity: z.enum(['critical', 'high', 'medium', 'low', 'info']).describe('Severity level'),
+      title: z.string().describe('Short title summarising the finding'),
+      body: z.string().describe('Detailed explanation in markdown'),
+      new_line: z.coerce.number().int().optional().describe('Line number on the new (added) side of the diff'),
+      old_line: z.coerce.number().int().optional().describe('Line number on the old (deleted) side of the diff'),
+      suggestion: z.string().optional().describe('Optional replacement code — rendered as a GitLab "Apply suggestion" block'),
+    })).optional().describe('Structured findings array (preferred over report_markdown)'),
+    report_markdown: z.string().optional().describe('Fallback: raw markdown report. Parser extracts findings matching "### [SEVERITY] path:line — title" headings. If nothing parses, the whole report is posted as a single MR note.'),
+    dedupe: z.boolean().optional().describe('Reconcile against existing tool-tagged threads to avoid duplicates (default: true). Set false to always post fresh.'),
+    auto_resolve_stale: z.boolean().optional().describe('Auto-resolve threads from previous runs that are no longer in the current findings (default: true). Set false to leave stale threads open.'),
+    concurrency: z.coerce.number().int().min(1).max(20).optional().describe('Max parallel GitLab API requests (default: 4)'),
+  },
+}, async (args) => {
+  const result = await postReviewFindingsTool(client, args)
   return { content: [{ type: 'text', text: JSON.stringify(result) }] }
 })
 
