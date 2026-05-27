@@ -249,16 +249,16 @@ Designed to consume `/ck:code-review` output. Pass either structured `findings` 
 
 ```ts
 {
-  inline:        [{ url, file, line, hash }],   // newly posted inline discussions
-  updated:       [{ url, file, line, hash }],   // existing threads whose body changed
-  unchanged:     [{ url, file, line, hash }],   // identical to last run — skipped
-  fallback:      [{ url, file, line, reason }], // posted as general MR notes
-  auto_resolved: [{ url, file, line, hash }],   // stale threads marked resolved
+  inline:        [{ file, line, hash }],   // newly posted inline discussions
+  updated:       [{ file, line, hash }],   // existing threads whose body changed
+  unchanged:     [{ file, line, hash }],   // identical to last run — skipped
+  fallback:      [{ file, line, reason }], // posted as general MR notes
+  auto_resolved: [{ file, line, hash }],   // stale threads marked resolved
   failed:        [{ file, line, error }],
 }
 ```
 
-**Safety:** the tool only ever inspects, updates, or resolves threads carrying its own hidden marker (`<!-- glab-mcp-finding:HASH -->`). Human comments and other bots are never touched.
+**Safety:** the tool only ever inspects, updates, or resolves threads carrying its own hidden marker (`<!-- glab-mcp-finding:HASH -->`). Human comments and other bots are never touched. Empty `findings` is a no-op — `auto_resolve_stale` only runs when at least one finding is supplied, so a buggy upstream returning `[]` cannot silently clear prior threads.
 
 **v1 scope:** single-line anchoring only. Multi-line ranges planned for v1.1.
 

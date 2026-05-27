@@ -422,9 +422,10 @@ describe('postReviewFindingsTool — reconcile', () => {
       () => mrPayload(),
       () => diffsPayload(['src/a.ts']),
       discussionsHandlerOnce(existing),
+      () => ({ id: 'd-new', notes: [{ id: 1 }] }),
       () => ({ id: 'd-stale', resolved: true }),
     ])
-    const r = await postReviewFindingsTool(client, { ...baseArgs, findings: [] })
+    const r = await postReviewFindingsTool(client, { ...baseArgs, findings: [finding] })
     expect(r.auto_resolved).toHaveLength(1)
     const puts = calls.filter(c => c.init?.method === 'PUT')
     expect(puts).toHaveLength(1)
@@ -452,8 +453,9 @@ describe('postReviewFindingsTool — reconcile', () => {
       () => mrPayload(),
       () => diffsPayload(['src/a.ts']),
       discussionsHandlerOnce(existing),
+      () => ({ id: 'd-new', notes: [{ id: 1 }] }),
     ])
-    const r = await postReviewFindingsTool(client, { ...baseArgs, findings: [], auto_resolve_stale: false })
+    const r = await postReviewFindingsTool(client, { ...baseArgs, findings: [finding], auto_resolve_stale: false })
     expect(r.auto_resolved).toHaveLength(0)
     expect(calls.filter(c => c.init?.method === 'PUT')).toHaveLength(0)
   })
@@ -473,8 +475,9 @@ describe('postReviewFindingsTool — reconcile', () => {
       () => diffsPayload(['src/a.ts']),
       (call) => { discussionsCalls.push(call); return page1 },
       (call) => { discussionsCalls.push(call); return page2 },
+      () => ({ id: 'd-new', notes: [{ id: 1 }] }),
     ])
-    await postReviewFindingsTool(client, { ...baseArgs, findings: [], auto_resolve_stale: false })
+    await postReviewFindingsTool(client, { ...baseArgs, findings: [finding], auto_resolve_stale: false })
     expect(discussionsCalls.length).toBe(2)
     expect(discussionsCalls[0].path).toContain('page=1')
     expect(discussionsCalls[1].path).toContain('page=2')
@@ -506,13 +509,22 @@ describe('postReviewFindingsTool — reconcile', () => {
       () => mrPayload(),
       () => diffsPayload(['src/a.ts']),
       discussionsHandlerOnce(existing),
+      () => ({ id: 'd-new', notes: [{ id: 1 }] }),
       () => ({ id: 'd-stale', resolved: true }),
     ])
-    const r = await postReviewFindingsTool(client, { ...baseArgs, findings: [] })
+    const r = await postReviewFindingsTool(client, { ...baseArgs, findings: [finding] })
     expect(r.auto_resolved).toHaveLength(1)
     const puts = calls.filter(c => c.init?.method === 'PUT')
     expect(puts).toHaveLength(1)
     expect(puts[0].path).toContain('/discussions/d-stale')
     expect(puts[0].path).not.toContain('d-human')
+  })
+
+  it('empty findings is a no-op: skips fetch, never resolves stale threads', async () => {
+    const { client, calls } = makeRequestSpy([])
+    const r = await postReviewFindingsTool(client, { ...baseArgs, findings: [] })
+    expect(r.inline).toEqual([])
+    expect(r.auto_resolved).toEqual([])
+    expect(calls).toHaveLength(0)
   })
 })

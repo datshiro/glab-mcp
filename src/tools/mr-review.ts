@@ -84,13 +84,15 @@ export async function postReviewFindingsTool(
     findings = parseMarkdownReport(args.report_markdown)
     if (findings.length === 0) {
       await postNote(client, projectId, mrIid, args.report_markdown)
-      result.fallback.push({ url: '', file: '(report)', line: 0, reason: 'unparseable-markdown' })
+      result.fallback.push({ file: '(report)', line: 0, reason: 'unparseable-markdown' })
       return result
     }
   }
   const dedupe = args.dedupe !== false
   const autoResolveStale = args.auto_resolve_stale !== false
-  if (findings.length === 0 && !dedupe) return result
+  // Empty findings is a no-op: never auto-resolve based on an empty input,
+  // since an upstream bug producing [] would otherwise silently clear every prior thread.
+  if (findings.length === 0) return result
 
   const [mr, diffs, existingDiscussions] = await Promise.all([
     client.request<MrPayload>(`/api/v4/projects/${encodeId(projectId)}/merge_requests/${mrIid}`),
@@ -104,7 +106,7 @@ export async function postReviewFindingsTool(
     : { unchanged: [] as Finding[], updated: [], toPost: findings, stale: [] }
 
   for (const f of buckets.unchanged) {
-    result.unchanged.push({ url: '', file: f.file, line: findingLine(f), hash: computeHash(f) })
+    result.unchanged.push({ file: f.file, line: findingLine(f), hash: computeHash(f) })
   }
 
   const concurrency = args.concurrency ?? 4
@@ -112,7 +114,7 @@ export async function postReviewFindingsTool(
     const hash = computeHash(f)
     try {
       await updateDiscussionNote(client, projectId, mrIid, thread.discussion_id, thread.note_id, renderBody(f, hash))
-      result.updated.push({ url: '', file: f.file, line: findingLine(f), hash })
+      result.updated.push({ file: f.file, line: findingLine(f), hash })
     } catch (e) {
       result.failed.push({ file: f.file, line: findingLine(f), error: (e as Error).message })
     }
@@ -131,7 +133,7 @@ export async function postReviewFindingsTool(
     await runWithConcurrency(buckets.stale, concurrency, async ({ hash, thread }) => {
       try {
         await resolveDiscussion(client, projectId, mrIid, thread.discussion_id)
-        result.auto_resolved.push({ url: '', file: '(stale)', line: 0, hash })
+        result.auto_resolved.push({ file: '(stale)', line: 0, hash })
       } catch (e) {
         result.failed.push({ file: '(stale)', line: 0, error: (e as Error).message })
       }

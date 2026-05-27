@@ -9,14 +9,12 @@ import {
 } from './mr-review-helpers.js'
 
 export interface FindingResult {
-  url: string
   file: string
   line: number
   hash: string
 }
 
 export interface FallbackResult {
-  url: string
   file: string
   line: number
   reason: 'off-diff' | '400' | 'unparseable-markdown'
@@ -87,12 +85,12 @@ export async function postOneFinding(
         `/api/v4/projects/${encodeId(projectId)}/merge_requests/${mrIid}/discussions`,
         { method: 'POST', body: JSON.stringify({ body: renderBody(f, hash), position: buildPosition(f, refs) }) },
       )
-      return { kind: 'inline', result: { url: '', file: f.file, line, hash } }
+      return { kind: 'inline', result: { file: f.file, line, hash } }
     } catch (e) {
       if (e instanceof GitLabError && e.statusCode === 400) {
         try {
           await postNote(client, projectId, mrIid, fallbackBody(f, hash))
-          return { kind: 'fallback', result: { url: '', file: f.file, line, reason: '400' } }
+          return { kind: 'fallback', result: { file: f.file, line, reason: '400' } }
         } catch (e2) {
           return { kind: 'failed', result: { file: f.file, line, error: (e2 as Error).message } }
         }
@@ -102,7 +100,7 @@ export async function postOneFinding(
   }
   try {
     await postNote(client, projectId, mrIid, fallbackBody(f, hash))
-    return { kind: 'fallback', result: { url: '', file: f.file, line, reason: 'off-diff' } }
+    return { kind: 'fallback', result: { file: f.file, line, reason: 'off-diff' } }
   } catch (e) {
     return { kind: 'failed', result: { file: f.file, line, error: (e as Error).message } }
   }
