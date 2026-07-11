@@ -27,6 +27,15 @@ describe('config-writer', () => {
     name: 'Claude Code',
     scope: 'project',
     configPath: '/projects/myapp/.mcp.json',
+    configFormat: 'json',
+    detected: true,
+  }
+
+  const codexClient: McpClient = {
+    name: 'Codex',
+    scope: 'global',
+    configPath: '/home/testuser/.codex/config.toml',
+    configFormat: 'toml',
     detected: true,
   }
 
@@ -66,7 +75,8 @@ describe('config-writer', () => {
 
       expect(result.success).toBe(true)
       const writtenContent = JSON.parse(mockWriteFileSync.mock.calls[0][1] as string)
-      expect(writtenContent.mcpServers.gitlab.env.GITLAB_PAT).toBe('${MY_PAT}')
+      expect(writtenContent.mcpServers.gitlab.env.GITLAB_PAT).toBeUndefined()
+      expect(writtenContent.mcpServers.gitlab.env.GITLAB_PAT_ENV_VAR).toBe('MY_PAT')
     })
 
     it('preserves existing MCP servers when merging', () => {
@@ -130,6 +140,71 @@ describe('config-writer', () => {
       expect(result.success).toBe(false)
       expect(result.error).toContain('malformed JSON')
       expect(mockWriteFileSync).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Codex TOML config', () => {
+    it('writes a Codex MCP server entry with direct credentials', () => {
+      mockExistsSync.mockImplementation((p) => String(p) === '/home/testuser/.codex')
+
+      const result = writeConfig(codexClient, 'https://gitlab.com', 'glpat-xxx', false, 'GITLAB_PAT')
+
+      expect(result.success).toBe(true)
+      const content = mockWriteFileSync.mock.calls[0][1] as string
+      expect(content).toContain('[mcp_servers.gitlab]')
+      expect(content).toContain('command = "npx"')
+      expect(content).toContain('args = ["-y","glab-mcp"]')
+      expect(content).toContain('[mcp_servers.gitlab.env]')
+      expect(content).toContain('GITLAB_URL = "https://gitlab.com"')
+      expect(content).toContain('GITLAB_PAT = "glpat-xxx"')
+    })
+
+    it('relies on the inherited PAT when environment-variable mode is selected', () => {
+      mockExistsSync.mockImplementation((p) => String(p) === '/home/testuser/.codex')
+
+      const result = writeConfig(codexClient, 'https://gitlab.com', '', true, 'MY_PAT')
+
+      expect(result.success).toBe(true)
+      const content = mockWriteFileSync.mock.calls[0][1] as string
+      expect(content).toContain('GITLAB_URL = "https://gitlab.com"')
+      expect(content).not.toMatch(/^GITLAB_PAT = /m)
+      expect(content).toContain('GITLAB_PAT_ENV_VAR = "MY_PAT"')
+    })
+
+    it('replaces only the existing gitlab MCP table', () => {
+      mockExistsSync.mockImplementation((p) => {
+        return String(p) === '/home/testuser/.codex/config.toml' || String(p) === '/home/testuser/.codex'
+      })
+      mockReadFileSync.mockReturnValue([
+        'model = "gpt-5"',
+        '',
+        '[mcp_servers.gitlab]',
+        'command = "old-command"',
+        '',
+        '[mcp_servers.gitlab.env]',
+        'GITLAB_PAT = "old-token"',
+        '',
+        '[mcp_servers.other]',
+        'command = "other-command"',
+      ].join('\n'))
+
+      const result = writeConfig(codexClient, 'https://gitlab.com', 'glpat-new', false, 'GITLAB_PAT')
+
+      expect(result.success).toBe(true)
+      expect(result.overwritten).toBe(true)
+      const content = mockWriteFileSync.mock.calls[0][1] as string
+      expect(content).toContain('model = "gpt-5"')
+      expect(content).toContain('[mcp_servers.other]')
+      expect(content).not.toContain('old-command')
+      expect(content).not.toContain('old-token')
+      expect(content.match(/\[mcp_servers\.gitlab\]/g)).toHaveLength(1)
+    })
+
+    it('finds an existing Codex GitLab entry', () => {
+      mockExistsSync.mockReturnValue(true)
+      mockReadFileSync.mockReturnValue('[mcp_servers.gitlab]\ncommand = "npx"\n')
+
+      expect(hasExistingGitlabEntry(codexClient)).toBe(true)
     })
   })
 

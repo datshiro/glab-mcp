@@ -38,6 +38,18 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow('GITLAB_PAT')
   })
 
+  it('uses the configured alternate PAT environment variable', async () => {
+    process.env.GITLAB_URL = 'https://gitlab.example.com'
+    process.env.GITLAB_PAT_ENV_VAR = 'MY_GITLAB_PAT'
+    process.env.MY_GITLAB_PAT = 'glpat-alternate'
+    delete process.env.GITLAB_PAT
+
+    const { loadConfig } = await import('../src/config.js')
+    const config = loadConfig()
+
+    expect(config.pat).toBe('glpat-alternate')
+  })
+
   it('strips trailing slash from GITLAB_URL', async () => {
     process.env.GITLAB_URL = 'https://gitlab.example.com/'
     process.env.GITLAB_PAT = 'glpat-test123'

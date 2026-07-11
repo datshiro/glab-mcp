@@ -1,6 +1,6 @@
 {
   "name": "glab-mcp",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "GitLab MCP server — create MRs, watch pipelines, ship code without leaving your AI session",
   "type": "module",
   "main": "dist/index.js",
@@ -11,6 +11,7 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
+    "test:mcp": "npm run build && vitest run --config vitest.mcp.config.ts",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },

@@ -22,13 +22,17 @@ export interface WriteResult {
 }
 
 function buildServerEntry(gitlabUrl: string, pat: string, useEnvVar: boolean, envVarName: string): McpServerEntry {
+  const env: Record<string, string> = { GITLAB_URL: gitlabUrl }
+  if (useEnvVar) {
+    env.GITLAB_PAT_ENV_VAR = envVarName
+  } else {
+    env.GITLAB_PAT = pat
+  }
+
   return {
     command: 'npx',
     args: ['-y', 'glab-mcp'],
-    env: {
-      GITLAB_URL: gitlabUrl,
-      GITLAB_PAT: useEnvVar ? `\${${envVarName}}` : pat,
-    },
+    env,
   }
 }
 
@@ -39,7 +43,7 @@ export class MalformedConfigError extends Error {
   }
 }
 
-function readExistingConfig(configPath: string): McpConfig {
+function readExistingJsonConfig(configPath: string): McpConfig {
   if (!existsSync(configPath)) return {}
   const raw = readFileSync(configPath, 'utf-8')
   if (raw.trim() === '') return {}
@@ -50,8 +54,47 @@ function readExistingConfig(configPath: string): McpConfig {
   }
 }
 
+const CODEX_GITLAB_TABLE = 'mcp_servers.gitlab'
+
+function hasTomlTable(content: string, table: string): boolean {
+  const header = new RegExp(`^\\s*\\[${table.replace('.', '\\.')}]\\s*(?:#.*)?$`, 'm')
+  return header.test(content)
+}
+
+function removeTomlTable(content: string, table: string): string {
+  let skipTable = false
+  const retainedLines = content.split(/\r?\n/).filter((line) => {
+    const match = line.match(/^\s*\[([^\]]+)\]\s*(?:#.*)?$/)
+    if (match) {
+      skipTable = match[1] === table || match[1].startsWith(`${table}.`)
+    }
+    return !skipTable
+  })
+
+  return retainedLines.join('\n').trimEnd()
+}
+
+function buildCodexConfig(existingContent: string, gitlabUrl: string, pat: string, useEnvVar: boolean, envVarName: string): string {
+  const entry = buildServerEntry(gitlabUrl, pat, useEnvVar, envVarName)
+  const existing = removeTomlTable(existingContent, CODEX_GITLAB_TABLE)
+  const lines = [
+    `[${CODEX_GITLAB_TABLE}]`,
+    `command = ${JSON.stringify(entry.command)}`,
+    `args = ${JSON.stringify(entry.args)}`,
+    '',
+    `[${CODEX_GITLAB_TABLE}.env]`,
+    ...Object.entries(entry.env).map(([key, value]) => `${key} = ${JSON.stringify(value)}`),
+  ]
+
+  return `${existing ? `${existing}\n\n` : ''}${lines.join('\n')}\n`
+}
+
 export function hasExistingGitlabEntry(client: McpClient): boolean {
-  const config = readExistingConfig(client.configPath)
+  if (client.configFormat === 'toml') {
+    return existsSync(client.configPath) && hasTomlTable(readFileSync(client.configPath, 'utf-8'), CODEX_GITLAB_TABLE)
+  }
+
+  const config = readExistingJsonConfig(client.configPath)
   return config.mcpServers?.gitlab !== undefined
 }
 
@@ -76,15 +119,22 @@ export function writeConfig(
       mkdirSync(dir, { recursive: true })
     }
 
-    const config = readExistingConfig(client.configPath)
-    result.overwritten = config.mcpServers?.gitlab !== undefined
+    let content: string
+    if (client.configFormat === 'toml') {
+      const existing = existsSync(client.configPath) ? readFileSync(client.configPath, 'utf-8') : ''
+      result.overwritten = hasTomlTable(existing, CODEX_GITLAB_TABLE)
+      content = buildCodexConfig(existing, gitlabUrl, pat, useEnvVar, envVarName)
+    } else {
+      const config = readExistingJsonConfig(client.configPath)
+      result.overwritten = config.mcpServers?.gitlab !== undefined
 
-    if (!config.mcpServers) {
-      config.mcpServers = {}
+      if (!config.mcpServers) {
+        config.mcpServers = {}
+      }
+      config.mcpServers.gitlab = buildServerEntry(gitlabUrl, pat, useEnvVar, envVarName)
+      content = JSON.stringify(config, null, 2) + '\n'
     }
-    config.mcpServers.gitlab = buildServerEntry(gitlabUrl, pat, useEnvVar, envVarName)
 
-    const content = JSON.stringify(config, null, 2) + '\n'
     writeFileSync(client.configPath, content, { encoding: 'utf-8', mode: useEnvVar ? 0o644 : 0o600 })
     if (!useEnvVar) {
       // Ensure restrictive permissions even if file already existed

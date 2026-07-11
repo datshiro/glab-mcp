@@ -6,6 +6,7 @@ export interface McpClient {
   name: string
   scope: 'project' | 'global'
   configPath: string
+  configFormat: 'json' | 'toml'
   detected: boolean
 }
 
@@ -31,19 +32,29 @@ export function detectClients(cwd: string): McpClient[] {
       name: 'Claude Code',
       scope: 'project',
       configPath: join(cwd, '.mcp.json'),
+      configFormat: 'json',
       detected: existsSync(join(home, '.claude')),
     },
     {
       name: 'Claude Desktop',
       scope: 'global',
       configPath: getClaudeDesktopConfigPath(),
+      configFormat: 'json',
       detected: existsSync(dirname(getClaudeDesktopConfigPath())),
     },
     {
       name: 'Cursor',
       scope: 'project',
       configPath: join(cwd, '.cursor', 'mcp.json'),
+      configFormat: 'json',
       detected: existsSync(join(home, '.cursor')),
+    },
+    {
+      name: 'Codex',
+      scope: 'global',
+      configPath: join(home, '.codex', 'config.toml'),
+      configFormat: 'toml',
+      detected: existsSync(join(home, '.codex')),
     },
   ]
 

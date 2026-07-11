@@ -4,5 +4,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.{test,spec}.{ts,js}', 'src/**/*.{test,spec}.{ts,js}'],
+    exclude: ['test/mcp-stdio.test.ts'],
   },
 })

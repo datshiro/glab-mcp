@@ -1,6 +1,6 @@
 # glab-mcp
 
-A [Model Context Protocol](https://modelcontextprotocol.io) server that connects AI coding assistants (Claude Code, Claude Desktop, Cursor) to GitLab. Create MRs, watch pipelines, and ship code without ever leaving your AI session.
+A [Model Context Protocol](https://modelcontextprotocol.io) server that connects AI coding assistants (Codex, Claude Code, Claude Desktop, Cursor) to GitLab. Create MRs, watch pipelines, and ship code without ever leaving your AI session.
 
 ```
 AI assistant → glab-mcp → GitLab API
@@ -17,7 +17,7 @@ npx glab-mcp init
 The setup wizard will:
 1. Ask for your GitLab URL and Personal Access Token
 2. Validate your credentials against the GitLab API
-3. Auto-detect your installed AI clients (Claude Code, Claude Desktop, Cursor)
+3. Auto-detect your installed AI clients (Codex, Claude Code, Claude Desktop, Cursor)
 4. Write the correct config file for each client
 
 That's it. Restart your AI client and start using GitLab tools.
@@ -93,6 +93,32 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) a
 ### Cursor
 
 Add to `.cursor/mcp.json` in your project root, same `"mcpServers"` block.
+
+### Codex
+
+Add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.gitlab]
+command = "npx"
+args = ["-y", "glab-mcp"]
+
+[mcp_servers.gitlab.env]
+GITLAB_URL = "https://gitlab.com"
+GITLAB_PAT = "glpat-xxxx"
+```
+
+For a Codex desktop app environment variable setup, omit `GITLAB_PAT` from that table and place it in `~/.codex/.env` instead:
+
+```dotenv
+GITLAB_PAT=glpat-xxxx
+```
+
+Restart Codex after changing either file. In the Codex CLI, the server can also be registered with:
+
+```bash
+codex mcp add gitlab --env GITLAB_URL=https://gitlab.com --env GITLAB_PAT=glpat-xxxx -- npx -y glab-mcp
+```
 
 ### Other MCP clients
 
@@ -297,6 +323,9 @@ npm install
 # Run tests
 npm test
 
+# Verify MCP stdio initialization and tool discovery
+npm run test:mcp
+
 # Watch mode
 npm run test:watch
 
@@ -325,6 +354,7 @@ src/
     workflow.ts      # Workflow combos (ship_mr, watch_pipeline)
 test/
   config.test.ts
+  mcp-stdio.test.ts    # MCP initialization and tool-discovery compatibility
   gitlab-client.test.ts
   cli/
     config-writer.test.ts

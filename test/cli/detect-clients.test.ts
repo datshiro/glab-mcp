@@ -28,10 +28,10 @@ describe('detectClients', () => {
     vi.restoreAllMocks()
   })
 
-  it('returns all three clients', () => {
+  it('returns all supported clients', () => {
     const clients = detectClients('/projects/myapp')
-    expect(clients).toHaveLength(3)
-    expect(clients.map(c => c.name)).toEqual(['Claude Code', 'Claude Desktop', 'Cursor'])
+    expect(clients).toHaveLength(4)
+    expect(clients.map(c => c.name)).toEqual(['Claude Code', 'Claude Desktop', 'Cursor', 'Codex'])
   })
 
   it('detects Claude Code when ~/.claude exists', () => {
@@ -43,6 +43,7 @@ describe('detectClients', () => {
     expect(claudeCode.detected).toBe(true)
     expect(claudeCode.scope).toBe('project')
     expect(claudeCode.configPath).toBe('/projects/myapp/.mcp.json')
+    expect(claudeCode.configFormat).toBe('json')
   })
 
   it('detects Cursor when ~/.cursor exists', () => {
@@ -54,6 +55,7 @@ describe('detectClients', () => {
     expect(cursor.detected).toBe(true)
     expect(cursor.scope).toBe('project')
     expect(cursor.configPath).toBe('/projects/myapp/.cursor/mcp.json')
+    expect(cursor.configFormat).toBe('json')
   })
 
   it('uses macOS path for Claude Desktop on darwin', () => {
@@ -69,6 +71,18 @@ describe('detectClients', () => {
     const clients = detectClients('/projects/myapp')
     const desktop = clients.find(c => c.name === 'Claude Desktop')!
     expect(desktop.configPath).toContain('.config/Claude')
+  })
+
+  it('detects Codex and uses its global TOML configuration', () => {
+    mockExistsSync.mockImplementation((p) => String(p) === '/home/testuser/.codex')
+
+    const clients = detectClients('/projects/myapp')
+    const codex = clients.find(c => c.name === 'Codex')!
+
+    expect(codex.detected).toBe(true)
+    expect(codex.scope).toBe('global')
+    expect(codex.configFormat).toBe('toml')
+    expect(codex.configPath).toBe('/home/testuser/.codex/config.toml')
   })
 
   it('marks all clients as not detected when no directories exist', () => {
