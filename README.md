@@ -33,6 +33,8 @@ That's it. Restart your AI client and start using GitLab tools.
 | `create_mr` | Create a merge request |
 | `list_mrs` | List / filter MRs by state, author, or label |
 | `comment_mr` | Post a comment on an MR |
+| `resolve_mr_discussion` | Mark an MR discussion thread resolved / unresolved |
+| `reply_mr_discussion` | Reply inside a specific MR discussion thread |
 | `post_review_findings` | Post a code-review report as anchored inline MR comments (reconciles on re-run) |
 | `approve_mr` | Approve an MR |
 | `merge_mr` | Merge an MR |

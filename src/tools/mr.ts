@@ -132,6 +132,27 @@ export async function listMrDiscussionsTool(
   )
 }
 
+export async function resolveMrDiscussionTool(
+  client: GitLabClient,
+  args: { project_id: number | string; mr_iid: number; discussion_id: string; resolved?: boolean }
+) {
+  const resolved = args.resolved ?? true
+  return client.request<Discussion>(
+    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}/discussions/${encodeURIComponent(args.discussion_id)}`,
+    { method: 'PUT', body: JSON.stringify({ resolved }) }
+  )
+}
+
+export async function replyMrDiscussionTool(
+  client: GitLabClient,
+  args: { project_id: number | string; mr_iid: number; discussion_id: string; body: string }
+) {
+  return client.request<DiscussionNote>(
+    `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}/discussions/${encodeURIComponent(args.discussion_id)}/notes`,
+    { method: 'POST', body: JSON.stringify({ body: args.body }) }
+  )
+}
+
 interface CommitStatus {
   name: string
   status: string

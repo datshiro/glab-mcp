@@ -12,7 +12,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { loadConfig } from './config.js'
 import { GitLabClient } from './gitlab-client.js'
-import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, getMrStatusChecksTool } from './tools/mr.js'
+import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, resolveMrDiscussionTool, replyMrDiscussionTool, getMrStatusChecksTool } from './tools/mr.js'
 import { postReviewFindingsTool } from './tools/mr-review.js'
 import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool, getJobDetailTool, playJobTool, watchJobTool } from './tools/pipeline.js'
 import { shipMrTool, watchPipelineTool } from './tools/workflow.js'
@@ -164,6 +164,32 @@ server.registerTool('list_mr_discussions', {
   },
 }, async (args) => {
   const result = await listMrDiscussionsTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('resolve_mr_discussion', {
+  description: 'Mark a GitLab merge request discussion thread as resolved (or unresolved). Only works on resolvable threads — get discussion_id from the top-level "id" field of list_mr_discussions. Given a GitLab MR URL, extract "group/project" as project_id and the trailing number as mr_iid.',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
+    discussion_id: z.string().describe('Discussion thread ID — the top-level "id" field from list_mr_discussions'),
+    resolved: z.boolean().optional().describe('true to resolve (default), false to unresolve'),
+  },
+}, async (args) => {
+  const result = await resolveMrDiscussionTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
+server.registerTool('reply_mr_discussion', {
+  description: 'Reply inside a specific GitLab merge request discussion thread (adds a note to the existing thread rather than a new top-level comment). Get discussion_id from the top-level "id" field of list_mr_discussions. Given a GitLab MR URL, extract "group/project" as project_id and the trailing number as mr_iid.',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
+    discussion_id: z.string().describe('Discussion thread ID — the top-level "id" field from list_mr_discussions'),
+    body: z.string().describe('Reply body (markdown)'),
+  },
+}, async (args) => {
+  const result = await replyMrDiscussionTool(client, args)
   return { content: [{ type: 'text', text: JSON.stringify(result) }] }
 })
 

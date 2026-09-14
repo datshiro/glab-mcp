@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { z } from 'zod'
 import { GitLabClient } from '../../src/gitlab-client.js'
-import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, getMrStatusChecksTool } from '../../src/tools/mr.js'
+import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, resolveMrDiscussionTool, replyMrDiscussionTool, getMrStatusChecksTool } from '../../src/tools/mr.js'
 
 function makeClient(responses: Record<string, unknown> = {}) {
   return {
@@ -185,6 +185,47 @@ describe('list_mr_discussions', () => {
     const calledUrl = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
     expect(calledUrl).toContain('page=2')
     expect(calledUrl).toContain('per_page=50')
+  })
+})
+
+describe('resolve_mr_discussion', () => {
+  it('sends PUT with resolved=true by default', async () => {
+    const client = makeClient({ 'discussions/abc': { id: 'abc', notes: [] } })
+    const result = await resolveMrDiscussionTool(client, { project_id: 42, mr_iid: 1, discussion_id: 'abc' })
+    expect(result.id).toBe('abc')
+    expect(client.request).toHaveBeenCalledWith(
+      expect.stringContaining('merge_requests/1/discussions/abc'),
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ resolved: true }) })
+    )
+  })
+
+  it('sends resolved=false when unresolving', async () => {
+    const client = makeClient({ 'discussions/abc': { id: 'abc', notes: [] } })
+    await resolveMrDiscussionTool(client, { project_id: 42, mr_iid: 1, discussion_id: 'abc', resolved: false })
+    expect(client.request).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ body: JSON.stringify({ resolved: false }) })
+    )
+  })
+
+  it('url-encodes the discussion id', async () => {
+    const client = makeClient({ 'discussions': { id: 'a/b', notes: [] } })
+    await resolveMrDiscussionTool(client, { project_id: 'group/project', mr_iid: 1, discussion_id: 'a/b' })
+    const calledUrl = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(calledUrl).toContain('discussions/a%2Fb')
+    expect(calledUrl).toContain('projects/group%2Fproject')
+  })
+})
+
+describe('reply_mr_discussion', () => {
+  it('posts a note to the thread and returns it', async () => {
+    const client = makeClient({ 'discussions/abc/notes': { id: 77, body: 'thanks' } })
+    const result = await replyMrDiscussionTool(client, { project_id: 42, mr_iid: 1, discussion_id: 'abc', body: 'thanks' })
+    expect(result.id).toBe(77)
+    expect(client.request).toHaveBeenCalledWith(
+      expect.stringContaining('merge_requests/1/discussions/abc/notes'),
+      expect.objectContaining({ method: 'POST', body: expect.stringContaining('thanks') })
+    )
   })
 })
 
