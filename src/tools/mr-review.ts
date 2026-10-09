@@ -10,6 +10,7 @@ import {
 import {
   extractToolThreads,
   fetchAllDiscussions,
+  fetchAllPages,
   reconcile,
   resolveDiscussion,
   updateDiscussionNote,
@@ -22,6 +23,9 @@ import {
   type FallbackResult,
   type FindingResult,
 } from './mr-review-post.js'
+
+const DIFF_PAGE_SIZE = 20
+const DIFF_MAX_PAGES = 50
 
 export * from './mr-review-helpers.js'
 export type { FailedResult, FallbackResult, FindingResult } from './mr-review-post.js'
@@ -96,7 +100,14 @@ export async function postReviewFindingsTool(
 
   const [mr, diffs, existingDiscussions] = await Promise.all([
     client.request<MrPayload>(`/api/v4/projects/${encodeId(projectId)}/merge_requests/${mrIid}`),
-    client.request<DiffEntry[]>(`/api/v4/projects/${encodeId(projectId)}/merge_requests/${mrIid}/diffs`),
+    // A partial file list would mark later files off-diff. Diff pages carry full patches, and some
+    // GitLab servers return 500 for per_page >= 40, so page by GitLab's default of 20.
+    fetchAllPages<DiffEntry>(
+      client,
+      `/api/v4/projects/${encodeId(projectId)}/merge_requests/${mrIid}/diffs`,
+      DIFF_PAGE_SIZE,
+      DIFF_MAX_PAGES,
+    ),
     dedupe ? fetchAllDiscussions(client, projectId, mrIid) : Promise.resolve([]),
   ])
   const diffFiles = diffFileSet(diffs)

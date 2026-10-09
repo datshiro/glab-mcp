@@ -247,6 +247,31 @@ describe('postReviewFindingsTool — core POST + fallback', () => {
     expect(body0.position).toMatchObject({ new_path: 'src/a.ts', new_line: 10, position_type: 'text', base_sha: 'b' })
   })
 
+  it('pages through the MR diffs so files after the first page still get inline comments', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, i) => `src/f${i}.ts`)
+    const findings: Finding[] = [
+      { file: 'src/late.ts', new_line: 7, severity: 'medium', title: 'Late', body: 'b' },
+    ]
+    const { client, calls } = makeRequestSpy([
+      ({ path, init }) => {
+        if (init?.method === 'POST') return { id: 'd1', notes: [{ id: 1 }] }
+        if (path.endsWith('/merge_requests/1')) return mrPayload()
+        if (path.includes('/diffs?page=1&')) return diffsPayload(firstPage)
+        if (path.includes('/diffs?page=2&')) return diffsPayload(['src/late.ts'])
+        if (path.includes('/discussions?page=')) return []
+        throw new Error(`unexpected call ${path}`)
+      },
+    ])
+    const r = await postReviewFindingsTool(client, { ...baseArgs, findings })
+    expect(r.inline).toHaveLength(1)
+    expect(r.fallback).toHaveLength(0)
+    const diffCalls = calls.filter(c => c.path.includes('/diffs'))
+    expect(diffCalls.map(c => c.path)).toEqual([
+      '/api/v4/projects/42/merge_requests/1/diffs?page=1&per_page=20',
+      '/api/v4/projects/42/merge_requests/1/diffs?page=2&per_page=20',
+    ])
+  })
+
   it('falls back to general note when file is off-diff', async () => {
     const findings: Finding[] = [
       { file: 'src/not-in-diff.ts', new_line: 5, severity: 'low', title: 'Z', body: 'b' },

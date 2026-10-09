@@ -49,20 +49,28 @@ export function extractToolThreads(discussions: Discussion[]): Map<string, Exist
 const MAX_PAGES = 10
 const PAGE_SIZE = 100
 
-export async function fetchAllDiscussions(
+// fetchAllPages follows GitLab's page/per_page pagination until a short page, up to maxPages.
+export async function fetchAllPages<T>(
+  client: GitLabClient,
+  path: string,
+  pageSize = PAGE_SIZE,
+  maxPages = MAX_PAGES,
+): Promise<T[]> {
+  const all: T[] = []
+  for (let page = 1; page <= maxPages; page++) {
+    const batch = await client.request<T[]>(`${path}?page=${page}&per_page=${pageSize}`)
+    all.push(...batch)
+    if (batch.length < pageSize) return all
+  }
+  return all
+}
+
+export function fetchAllDiscussions(
   client: GitLabClient,
   projectId: number | string,
   mrIid: number,
 ): Promise<Discussion[]> {
-  const all: Discussion[] = []
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const batch = await client.request<Discussion[]>(
-      `/api/v4/projects/${encodeId(projectId)}/merge_requests/${mrIid}/discussions?page=${page}&per_page=${PAGE_SIZE}`,
-    )
-    all.push(...batch)
-    if (batch.length < PAGE_SIZE) return all
-  }
-  return all
+  return fetchAllPages<Discussion>(client, `/api/v4/projects/${encodeId(projectId)}/merge_requests/${mrIid}/discussions`)
 }
 
 export async function updateDiscussionNote(
