@@ -22,7 +22,7 @@ describe('MCP stdio compatibility', () => {
       await client.connect(transport)
       const { tools } = await client.listTools()
 
-      expect(tools).toHaveLength(21)
+      expect(tools).toHaveLength(22)
       expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
         'create_mr',
         'list_mrs',
