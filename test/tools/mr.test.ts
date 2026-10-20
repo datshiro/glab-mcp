@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { z } from 'zod'
 import { GitLabClient } from '../../src/gitlab-client.js'
-import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, resolveMrDiscussionTool, replyMrDiscussionTool, getMrStatusChecksTool } from '../../src/tools/mr.js'
+import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, getMrTool, mergeMrTool, listMrDiscussionsTool, resolveMrDiscussionTool, replyMrDiscussionTool, getMrStatusChecksTool } from '../../src/tools/mr.js'
 
 function makeClient(responses: Record<string, unknown> = {}) {
   return {
@@ -142,6 +142,54 @@ describe('approve_mr', () => {
     const client = makeClient({ 'approve': { approved: true } })
     const result = await approveMrTool(client, { project_id: 42, mr_iid: 1 })
     expect(result.approved).toBe(true)
+  })
+
+  it('sends the sha in the POST body when given', async () => {
+    const client = makeClient({ 'approve': { approved: true } })
+    await approveMrTool(client, { project_id: 42, mr_iid: 1, sha: 'abc' })
+    const [path, options] = vi.mocked(client.request).mock.calls[0] as [string, { method: string; body?: string }]
+    expect(path.endsWith('/approve')).toBe(true)
+    expect(options.method).toBe('POST')
+    expect(options.body).toBe(JSON.stringify({ sha: 'abc' }))
+  })
+
+  it('sends no body when sha is omitted', async () => {
+    const client = makeClient({ 'approve': { approved: true } })
+    await approveMrTool(client, { project_id: 42, mr_iid: 1 })
+    const [, options] = vi.mocked(client.request).mock.calls[0] as [string, { body?: string }]
+    expect(options.body).toBeUndefined()
+  })
+})
+
+describe('get_mr', () => {
+  it('fails when the approvals request fails', async () => {
+    const client = {
+      request: vi.fn().mockImplementation(async (path: string) => {
+        if (path.includes('/approvals')) throw new Error('GitLab API error 404')
+        return { iid: 1, state: 'opened', sha: 'abc', web_url: 'u', author: { username: 'kha' } }
+      }),
+      getJobTrace: vi.fn(),
+    } as unknown as GitLabClient
+    await expect(getMrTool(client, { project_id: 42, mr_iid: 1 })).rejects.toThrow('404')
+  })
+
+  it('returns the MR summary merged with approval state', async () => {
+    const client = makeClient({
+      '/approvals': { user_has_approved: true, user_can_approve: false },
+      'merge_requests/1': { iid: 1, state: 'opened', sha: 'abc', web_url: 'u', author: { username: 'kha' } },
+    })
+    const result = await getMrTool(client, { project_id: 42, mr_iid: 1 })
+    expect(result).toEqual({ iid: 1, state: 'opened', sha: 'abc', author_username: 'kha', web_url: 'u', user_has_approved: true, user_can_approve: false })
+  })
+
+  it('treats missing approval flags as false', async () => {
+    const client = makeClient({
+      '/approvals': {},
+      'merge_requests/1': { iid: 1, state: 'opened', sha: 'abc', web_url: 'u', author: { username: 'kha' } },
+    })
+    const result = await getMrTool(client, { project_id: 42, mr_iid: 1 })
+    expect(result.user_has_approved).toBe(false)
+    expect(result.user_can_approve).toBe(false)
   })
 })
 

@@ -12,7 +12,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { loadConfig } from './config.js'
 import { GitLabClient } from './gitlab-client.js'
-import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, mergeMrTool, listMrDiscussionsTool, resolveMrDiscussionTool, replyMrDiscussionTool, getMrStatusChecksTool } from './tools/mr.js'
+import { createMrTool, updateMrTool, listMrsTool, listLabelsTool, commentMrTool, approveMrTool, getMrTool, mergeMrTool, listMrDiscussionsTool, resolveMrDiscussionTool, replyMrDiscussionTool, getMrStatusChecksTool } from './tools/mr.js'
 import { postReviewFindingsTool } from './tools/mr-review.js'
 import { getPipelineStatusTool, getPipelineErrorsTool, listPipelineJobsTool, retryPipelineTool, getJobDetailTool, playJobTool, watchJobTool } from './tools/pipeline.js'
 import { shipMrTool, watchPipelineTool } from './tools/workflow.js'
@@ -106,6 +106,17 @@ server.registerTool('list_mrs', {
   return { content: [{ type: 'text', text: JSON.stringify(result) }] }
 })
 
+server.registerTool('get_mr', {
+  description: 'Get one GitLab merge request: state, head sha, author username, and whether the current user has approved it.',
+  inputSchema: {
+    project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
+    mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
+  },
+}, async (args) => {
+  const result = await getMrTool(client, args)
+  return { content: [{ type: 'text', text: JSON.stringify(result) }] }
+})
+
 server.registerTool('list_labels', {
   description: 'List labels for a GitLab project',
   inputSchema: {
@@ -136,6 +147,7 @@ server.registerTool('approve_mr', {
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
+    sha: z.string().min(1).optional().describe('Head commit SHA the approval is for; GitLab rejects the approval if the MR head differs'),
   },
 }, async (args) => {
   const result = await approveMrTool(client, args)

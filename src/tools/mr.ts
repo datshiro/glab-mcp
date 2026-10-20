@@ -83,12 +83,30 @@ export async function commentMrTool(
 
 export async function approveMrTool(
   client: GitLabClient,
-  args: { project_id: number | string; mr_iid: number }
+  args: { project_id: number | string; mr_iid: number; sha?: string }
 ) {
   return client.request<{ approved: boolean }>(
     `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}/approve`,
-    { method: 'POST' }
+    { method: 'POST', ...(args.sha ? { body: JSON.stringify({ sha: args.sha }) } : {}) }
   )
+}
+
+export async function getMrTool(
+  client: GitLabClient,
+  args: { project_id: number | string; mr_iid: number }
+) {
+  const base = `/api/v4/projects/${encodeId(args.project_id)}/merge_requests/${Number(args.mr_iid)}`
+  const mr = await client.request<{ iid: number; state: string; sha: string; web_url: string; author: { username: string } }>(base)
+  const approvals = await client.request<{ user_has_approved?: boolean; user_can_approve?: boolean }>(`${base}/approvals`)
+  return {
+    iid: mr.iid,
+    state: mr.state,
+    sha: mr.sha,
+    author_username: mr.author?.username ?? '',
+    web_url: mr.web_url,
+    user_has_approved: approvals.user_has_approved === true,
+    user_can_approve: approvals.user_can_approve === true,
+  }
 }
 
 export async function mergeMrTool(
