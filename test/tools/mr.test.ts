@@ -162,6 +162,17 @@ describe('approve_mr', () => {
 })
 
 describe('get_mr', () => {
+  it('fails when the approvals request fails', async () => {
+    const client = {
+      request: vi.fn().mockImplementation(async (path: string) => {
+        if (path.includes('/approvals')) throw new Error('GitLab API error 404')
+        return { iid: 1, state: 'opened', sha: 'abc', web_url: 'u', author: { username: 'kha' } }
+      }),
+      getJobTrace: vi.fn(),
+    } as unknown as GitLabClient
+    await expect(getMrTool(client, { project_id: 42, mr_iid: 1 })).rejects.toThrow('404')
+  })
+
   it('returns the MR summary merged with approval state', async () => {
     const client = makeClient({
       '/approvals': { user_has_approved: true, user_can_approve: false },

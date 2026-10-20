@@ -102,7 +102,7 @@ export async function getMrTool(
     iid: mr.iid,
     state: mr.state,
     sha: mr.sha,
-    author_username: mr.author.username,
+    author_username: mr.author?.username ?? '',
     web_url: mr.web_url,
     user_has_approved: approvals.user_has_approved === true,
     user_can_approve: approvals.user_can_approve === true,

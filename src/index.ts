@@ -147,7 +147,7 @@ server.registerTool('approve_mr', {
   inputSchema: {
     project_id: z.union([z.number(), z.string()]).describe('Project ID or URL-encoded path — extract everything between the host and /-/ from a GitLab URL (e.g. "group/project" or "group/sub/project")'),
     mr_iid: z.coerce.number().int().describe('MR internal ID (the number at the end of the GitLab MR URL)'),
-    sha: z.string().optional().describe('Head commit SHA the approval is for; GitLab rejects the approval if the MR head differs'),
+    sha: z.string().min(1).optional().describe('Head commit SHA the approval is for; GitLab rejects the approval if the MR head differs'),
   },
 }, async (args) => {
   const result = await approveMrTool(client, args)
